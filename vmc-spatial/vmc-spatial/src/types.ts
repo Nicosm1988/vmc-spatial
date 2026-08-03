@@ -8,7 +8,7 @@ export interface Zone {
   w?: number; h?: number; r?: number
   color: string; puestos: number; ocupacion: number; datalizacion: number; nota?: string
 }
-export interface VideoWall { id: string; nombre: string; x1: number; y1: number; x2: number; y2: number; pantallas: number }
+export interface VideoWall { id: string; nombre: string; x1: number; y1: number; x2: number; y2: number; pantallas: number; filas?: number }
 export interface OrientLabel { texto: string; x: number; y: number; rot?: number }
 export interface VmcDocument {
   schema: 'vmc-spatial/4'; nombre: string; piso: string
