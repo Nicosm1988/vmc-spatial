@@ -88,7 +88,7 @@ export default function Scene3D({ doc, selectedId, insight, noche, techo, onSele
         let rotY = Math.atan2(-uz, ux)
         const nzx = Math.sin(rotY), nzz = Math.cos(rotY)
         if (nzx * (mx - coreCx) + nzz * (mz - coreCz) < 0) rotY += Math.PI
-        return <VideoWall key={v.id} x={mx} z={mz} len={len} rotY={rotY} night={noche} count={v.pantallas} />
+        return <VideoWall key={v.id} x={mx} z={mz} len={len} rotY={rotY} night={noche} count={v.pantallas} filas={v.filas} />
       })}
 
       {/* Islas de trabajo */}
