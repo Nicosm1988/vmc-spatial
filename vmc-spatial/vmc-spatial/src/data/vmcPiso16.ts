@@ -62,7 +62,7 @@ export const VMC_PISO_16: VmcDocument = {
   // 4 paredes. Frente (Este): 30 (N) y 20 (S). Atrás (Oeste): 24 y 24.
   videoWalls: [
     { id: 'vw-ne', nombre: 'Pared Frente-Norte (derecho adelante)', x1: 31460, y1: 14756, x2: 41540, y2: 19544, pantallas: 30 },
-    { id: 'vw-se', nombre: 'Pared Frente-Sur (izquierdo adelante)', x1: 41540, y1: 20456, x2: 31460, y2: 25244, pantallas: 20 },
+    { id: 'vw-se', nombre: 'Pared Frente-Sur (izquierdo adelante)', x1: 41540, y1: 20456, x2: 31460, y2: 25244, pantallas: 30, filas: 3 },
     { id: 'vw-no', nombre: 'Pared Atrás-Norte (izquierda atrás)', x1: 24980, y1: 19544, x2: 30020, y2: 14756, pantallas: 24 },
     { id: 'vw-so', nombre: 'Pared Atrás-Sur (derecha atrás)', x1: 30020, y1: 25244, x2: 24980, y2: 20456, pantallas: 24 },
   ],
