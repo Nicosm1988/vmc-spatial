@@ -1,5 +1,5 @@
 import type { VmcDocument } from '../types'
-const KEY = 'vmc-spatial:doc:v2'
+const KEY = 'vmc-spatial:doc:v3'
 export function loadDoc(): VmcDocument | null {
   try { const raw = localStorage.getItem(KEY); if (!raw) return null; const p = JSON.parse(raw); return p && p.schema === 'vmc-spatial/2' ? p as VmcDocument : null } catch { return null }
 }

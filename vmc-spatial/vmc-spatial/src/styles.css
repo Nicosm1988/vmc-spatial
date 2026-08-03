@@ -50,12 +50,15 @@ button.danger:hover { background: #3a1513; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text-dim); }
 .plan-svg { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .plan-svg:active { cursor: grabbing; }
-.zone-label { font-size: 720px; fill: #f2f6ff; font-weight: 700; pointer-events: none; }
-.zone-sub { font-size: 520px; fill: rgba(230,238,255,.75); pointer-events: none; }
+.zone-label { font-size: 680px; fill: #f2f6ff; font-weight: 700; pointer-events: none; }
+.zone-sub { font-size: 500px; fill: rgba(230,238,255,.75); pointer-events: none; }
 .grid-line { stroke: rgba(39,224,255,.06); stroke-width: 18; }
-.street { font-size: 900px; fill: rgba(159,176,212,.65); font-weight: 600; letter-spacing: 2px; pointer-events: none; }
+.street { font-size: 850px; fill: rgba(159,176,212,.7); font-weight: 700; letter-spacing: 2px; pointer-events: none; }
 .compass { font-size: 1100px; fill: #03c1bd; font-weight: 800; pointer-events: none; }
 .scene-canvas { width: 100%; height: 100%; display: block; }
+.tag3d { background: rgba(6,14,34,.82); border: 1px solid var(--teal); color: #eaf2ff; padding: 4px 11px; border-radius: 8px; font-size: 12px; font-weight: 700; white-space: nowrap; letter-spacing: 1.5px; box-shadow: var(--shadow); pointer-events: none; }
+.tag3d.front { border-color: var(--teal-2); background: rgba(3,193,189,.2); }
+.tag3d.back { border-color: var(--azul-2); }
 .toast { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--teal); color: var(--text); padding: 9px 16px; border-radius: 10px; z-index: 20; box-shadow: var(--shadow); font-size: 13px; }
 .empty { color: var(--text-dim); font-size: 13px; line-height: 1.6; padding: 12px; border: 1px dashed var(--line); border-radius: 10px; text-align: center; }
 .side::-webkit-scrollbar, .topbar::-webkit-scrollbar { height: 8px; width: 8px; }

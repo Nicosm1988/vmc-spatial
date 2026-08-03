@@ -45,9 +45,19 @@ export default function Plan2D({ doc, selectedId, insight, onSelect }: Props) {
           const fill = insight === 'none' ? z.color : heat(insightDef.value(z))
           const { cx, cy } = center(z)
           const isCore = z.kind === 'nucleo'
+          const isPod = z.kind === 'servicio'
+          if (isPod) {
+            const r = Math.min(z.w, z.h) / 2
+            return (
+              <g key={z.id} onClick={(e) => { e.stopPropagation(); onSelect(z.id) }} style={{ cursor: 'pointer' }}>
+                <circle cx={cx} cy={cy} r={r} fill={fill} fillOpacity={0.5} stroke={isSel ? '#FFD166' : fill} strokeWidth={isSel ? 150 : 70} />
+                <text className="zone-sub" x={cx} y={cy + 150} textAnchor="middle">pod</text>
+              </g>
+            )
+          }
           return (
             <g key={z.id} onClick={(e) => { e.stopPropagation(); onSelect(z.id) }} style={{ cursor: 'pointer' }}>
-              <rect x={z.x} y={z.y} width={z.w} height={z.h} rx={220} fill={isCore ? 'url(#coreGlow)' : fill} fillOpacity={isCore ? 1 : 0.5} stroke={isSel ? '#FFD166' : (isCore ? '#0E9BC4' : fill)} strokeWidth={isSel ? 150 : 70} strokeOpacity={0.95} />
+              <rect x={z.x} y={z.y} width={z.w} height={z.h} rx={220} fill={isCore ? 'url(#coreGlow)' : fill} fillOpacity={isCore ? 1 : (z.kind === 'oficina' ? 0.62 : 0.5)} stroke={isSel ? '#FFD166' : (isCore ? '#0E9BC4' : fill)} strokeWidth={isSel ? 150 : 70} strokeOpacity={0.95} />
               {z.puestos > 0 && packDesks(z, z.puestos, doc.plate).map((p, i) => (<rect key={i} x={p.x - 850} y={p.y - 500} width={1700} height={1000} rx={90} fill="rgba(4,10,26,0.35)" stroke="rgba(255,255,255,0.35)" strokeWidth={30} />))}
               <text className="zone-label" x={cx} y={cy - 250} textAnchor="middle">{z.nombre}</text>
               <text className="zone-sub" x={cx} y={cy + 450} textAnchor="middle">{insight === 'none' ? (z.puestos > 0 ? `${z.puestos} puestos` : kindLabel(z.kind)) : insightDef.readout(z)}</text>
@@ -64,7 +74,7 @@ export default function Plan2D({ doc, selectedId, insight, onSelect }: Props) {
     </svg>
   )
 }
-function kindLabel(kind: string): string { switch (kind) { case 'nucleo': return 'Video Walls'; case 'sala': return 'Sala'; case 'troubleshooting': return 'Mesa central'; default: return 'Cluster' } }
+function kindLabel(kind: string): string { switch (kind) { case 'nucleo': return 'Video Walls'; case 'sala': return 'Sala'; case 'oficina': return 'Oficina'; case 'servicio': return 'Pod'; default: return 'Cluster' } }
 function gridLines(w: number, h: number, step: number) {
   const els: JSX.Element[] = []
   for (let x = 0; x <= w; x += step) els.push(<line key={`gx${x}`} className="grid-line" x1={x} y1={0} x2={x} y2={h} />)

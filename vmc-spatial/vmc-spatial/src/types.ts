@@ -1,6 +1,6 @@
 export interface Point { x: number; y: number }
 export type InsightKey = 'none' | 'ocupacion' | 'densidad' | 'capacidad' | 'datalizacion'
-export type ZoneKind = 'cluster' | 'nucleo' | 'sala' | 'troubleshooting' | 'servicio'
+export type ZoneKind = 'cluster' | 'nucleo' | 'sala' | 'oficina' | 'servicio'
 export interface Zone {
   id: string; nombre: string; kind: ZoneKind
   x: number; y: number; w: number; h: number

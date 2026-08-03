@@ -20,11 +20,11 @@ export default function Structure({ doc, selectedId, onSelect }: Props) {
         <div>🪑 <b>{totalPuestos}</b> puestos / hot desks</div>
         <div>🖥️ <b>{totalPantallas}</b> pantallas en video walls</div>
         <div>🧩 <b>{doc.zonas.length}</b> zonas modeladas</div>
-        <div>📐 Planta tipo Pelli · ~1.600 m²</div>
+        <div>🧭 Frente = Este (río) · Fondo = Oeste</div>
       </div>
     </div>
   )
 }
 function tipo(kind: string): string {
-  switch (kind) { case 'nucleo': return 'núcleo'; case 'sala': return 'sala'; case 'troubleshooting': return 'mesa'; default: return '—' }
+  switch (kind) { case 'nucleo': return 'núcleo'; case 'sala': return 'sala'; case 'oficina': return 'oficina'; case 'servicio': return 'pod'; default: return '—' }
 }

@@ -5,7 +5,8 @@ export const toM = (mm: number) => mm / MM_PER_M
 export function areaM2(z: Zone): number { return (z.w / MM_PER_M) * (z.h / MM_PER_M) }
 export function densidad(z: Zone): number { const a = areaM2(z); return a <= 0 ? 0 : (z.puestos / a) * 10 }
 export function center(z: Zone): { cx: number; cy: number } { return { cx: z.x + z.w / 2, cy: z.y + z.h / 2 } }
-export function packDesks(z: Zone, count: number, plate?: Point[], deskW = 1500, deskH = 1450, gap = 300): Array<{ x: number; y: number }> {
+// Devuelve puestos con su índice de fila (para orientar bench: filas pares/impares).
+export function packDesks(z: Zone, count: number, plate?: Point[], deskW = 1500, deskH = 1450, gap = 300): Array<{ x: number; y: number; row: number }> {
   if (count <= 0) return []
   const margin = 650
   const innerX = z.x + margin, innerY = z.y + margin
@@ -13,12 +14,12 @@ export function packDesks(z: Zone, count: number, plate?: Point[], deskW = 1500,
   const stepX = deskW + gap, stepY = deskH + gap
   const cols = Math.max(1, Math.floor(innerW / stepX))
   const rows = Math.max(1, Math.floor(innerH / stepY))
-  const points: Array<{ x: number; y: number }> = []
+  const points: Array<{ x: number; y: number; row: number }> = []
   for (let r = 0; r < rows && points.length < count; r++) {
     for (let c = 0; c < cols && points.length < count; c++) {
       const cx = innerX + c * stepX + deskW / 2
       const cy = innerY + r * stepY + deskH / 2
-      if (!plate || pointInPolygon(cx, cy, plate)) points.push({ x: cx, y: cy })
+      if (!plate || pointInPolygon(cx, cy, plate)) points.push({ x: cx, y: cy, row: r })
     }
   }
   return points

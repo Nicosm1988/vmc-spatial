@@ -1,38 +1,34 @@
-# VMC Spatial Studio · Piso 16 (3D realista, distribución CAD)
+# VMC Spatial Studio · Piso 16 (3D realista · distribución CAD)
 
-Gemelo espacial del **Piso 16 (VMC)** de YPF — Torre YPF, Puerto Madero. Vista 3D con **React Three Fiber + Drei**: sillas Herman Miller, monitores curvos, escritorios blancos y video walls (grilla de pantallas sobre credenzas), replicando las fotos reales.
+Gemelo espacial del **Piso 16 (VMC)** de YPF — Torre YPF, Puerto Madero. Vista 3D con **React Three Fiber + Drei**.
 
-## 🗺️ Distribución (plano CAD)
+## 🧭 Orientación (definida)
 
-Planta en forma de **lente (Pelli)**, con el **núcleo de servicio central** y los clusters del LAY OUT en el perímetro:
-- **Norte:** Data & Information Excellence · Machine Learning & AI · Performance · Control Tower
-- **Este (punta):** Troubleshooting
-- **Sur:** Operational License & Excellence · Control Execution · Control Execution · Business Digital Twin
-- **4 Video Walls** en las caras del núcleo · 2 salas de reunión vidriadas.
+- **FRENTE = Este** (punta derecha, Río de la Plata) → **3 oficinas**: la del **centro más grande** + 2 chicas (Norte y Sur).
+- **FONDO = Oeste** (Juana Manso, ciudad).
+- **LADOS = Norte** (Macacha Güemes) / **Sur** (Manuela Sáenz).
+- Etiquetas 3D flotantes (FRENTE / FONDO / LADO N / LADO S) + bandas de piso teal (frente) y azul (fondo).
 
 ## 🪑 Muebles (según fotos)
 
-- **Silla Herman Miller** (malla + respaldo con struts en Y, base de 5 estrellas) — `Furniture.tsx`.
-- **Monitor curvo ultrawide** (3 segmentos) + laptop sobre **escritorio blanco bench**.
-- **Video wall**: panel bronce + grilla de pantallas azules + **credenza blanca** debajo.
-- **Environment** (reflejos PBR, offline) + **ContactShadows** (sombras suaves).
+- **Silla Herman Miller** (malla, respaldo con struts en Y, base 5 estrellas).
+- **Monitor curvo ULTRAWIDE ENTERO** (un solo panel cóncavo, no partido) sobre escritorio blanco bench + laptop.
+- **Video wall**: panel bronce + grilla de pantallas + **credenza blanca** debajo.
+
+## 🗺️ Distribución (plano CAD)
+
+Núcleo central **en cruz** con 4 Video Walls. Perímetro (islas de escritorios):
+- **Norte:** Data & Information Excellence · Machine Learning & AI · Performance · Control Tower
+- **Sur:** Operational License & Excellence · Control Execution ×2 · Business Digital Twin
+- **Frente (Este):** 3 oficinas · **Oeste:** 2 salas de reunión · **Esquinas:** 2 pods redondos.
 
 ## 🧱 Stack
 
-Vite + React + TS + @react-three/fiber + @react-three/drei + three. Sin backend. Build en Vercel.
+Vite + React + TS + @react-three/fiber + @react-three/drei + three. Build en Vercel.
 
 ## 🚀 Local
-
 ```bash
-npm install
-npm run dev
-npm run build
+npm install && npm run dev
 ```
-
 ## ☁️ Deploy
-
 Vercel detecta `vercel.json` (Vite). Root Directory = carpeta con `package.json`.
-
-## 📐 Ajustar
-
-Zonas en `src/data/vmcPiso16.ts` (`x,y,w,h` en mm), o desde el Inspector (Editar) → Exportar JSON.
