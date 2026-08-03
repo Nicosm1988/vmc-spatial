@@ -1,12 +1,12 @@
 import type { Point, Zone } from '../types'
-import { pointInPolygon } from './plate'
+import { pointInPolygon, rotatePt } from './plate'
 export const MM_PER_M = 1000
 export const toM = (mm: number) => mm / MM_PER_M
 export function areaM2(z: Zone): number { return (z.w / MM_PER_M) * (z.h / MM_PER_M) }
 export function densidad(z: Zone): number { const a = areaM2(z); return a <= 0 ? 0 : (z.puestos / a) * 10 }
 export function center(z: Zone): { cx: number; cy: number } { return { cx: z.x + z.w / 2, cy: z.y + z.h / 2 } }
-// Devuelve puestos con su índice de fila (para orientar bench: filas pares/impares).
-export function packDesks(z: Zone, count: number, plate?: Point[], deskW = 1500, deskH = 1450, gap = 300): Array<{ x: number; y: number; row: number }> {
+// Puestos dentro de la isla, rotados por z.rot y recortados al contorno.
+export function packDesks(z: Zone, count: number, plate?: Point[], deskW = 1500, deskH = 1450, gap = 350): Point[] {
   if (count <= 0) return []
   const margin = 650
   const innerX = z.x + margin, innerY = z.y + margin
@@ -14,12 +14,15 @@ export function packDesks(z: Zone, count: number, plate?: Point[], deskW = 1500,
   const stepX = deskW + gap, stepY = deskH + gap
   const cols = Math.max(1, Math.floor(innerW / stepX))
   const rows = Math.max(1, Math.floor(innerH / stepY))
-  const points: Array<{ x: number; y: number; row: number }> = []
+  const cx = z.x + z.w / 2, cy = z.y + z.h / 2
+  const ang = z.rot || 0
+  const points: Point[] = []
   for (let r = 0; r < rows && points.length < count; r++) {
     for (let c = 0; c < cols && points.length < count; c++) {
-      const cx = innerX + c * stepX + deskW / 2
-      const cy = innerY + r * stepY + deskH / 2
-      if (!plate || pointInPolygon(cx, cy, plate)) points.push({ x: cx, y: cy, row: r })
+      const gx = innerX + c * stepX + deskW / 2
+      const gy = innerY + r * stepY + deskH / 2
+      const p = rotatePt(gx, gy, cx, cy, ang)
+      if (!plate || pointInPolygon(p.x, p.y, plate)) points.push(p)
     }
   }
   return points

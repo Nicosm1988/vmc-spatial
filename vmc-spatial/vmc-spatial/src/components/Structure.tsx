@@ -26,5 +26,5 @@ export default function Structure({ doc, selectedId, onSelect }: Props) {
   )
 }
 function tipo(kind: string): string {
-  switch (kind) { case 'nucleo': return 'núcleo'; case 'sala': return 'sala'; case 'oficina': return 'oficina'; case 'servicio': return 'pod'; default: return '—' }
+  switch (kind) { case 'sala': return 'sala'; case 'oficina': return 'oficina'; case 'salalarga': return 'sala larga'; case 'pod': return 'pod'; default: return '—' }
 }

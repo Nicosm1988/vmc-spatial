@@ -4,7 +4,7 @@ interface Props { doc: VmcDocument; selectedId: string | null; mode: AppMode; on
 export default function Inspector({ doc, selectedId, mode, onPatch }: Props) {
   const z = doc.zonas.find((x) => x.id === selectedId) || null
   const editable = mode !== 'explorar'
-  if (!z) return (<div><h3>Inspector</h3><div className="empty">Seleccioná un cluster/oficina en el plano, en el 3D o en la lista de estructura para ver y editar sus propiedades.</div></div>)
+  if (!z) return (<div><h3>Inspector</h3><div className="empty">Seleccioná una zona en el plano, en el 3D o en la lista de estructura para ver y editar sus propiedades.</div></div>)
   const dis = !editable
   const num = (v: string) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
   return (

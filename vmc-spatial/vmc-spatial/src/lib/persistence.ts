@@ -1,7 +1,7 @@
 import type { VmcDocument } from '../types'
-const KEY = 'vmc-spatial:doc:v3'
+const KEY = 'vmc-spatial:doc:v4'
 export function loadDoc(): VmcDocument | null {
-  try { const raw = localStorage.getItem(KEY); if (!raw) return null; const p = JSON.parse(raw); return p && p.schema === 'vmc-spatial/2' ? p as VmcDocument : null } catch { return null }
+  try { const raw = localStorage.getItem(KEY); if (!raw) return null; const p = JSON.parse(raw); return p && p.schema === 'vmc-spatial/3' ? p as VmcDocument : null } catch { return null }
 }
 export function saveDoc(doc: VmcDocument): void { try { localStorage.setItem(KEY, JSON.stringify(doc)) } catch { /* noop */ } }
 export function clearDoc(): void { try { localStorage.removeItem(KEY) } catch { /* noop */ } }
@@ -15,7 +15,7 @@ export function importJson(file: File): Promise<VmcDocument> {
   return new Promise((resolve, reject) => {
     if (file.size > 5 * 1024 * 1024) { reject(new Error('El archivo supera los 5 MB.')); return }
     const reader = new FileReader()
-    reader.onload = () => { try { const p = JSON.parse(String(reader.result)); if (!p || p.schema !== 'vmc-spatial/2') { reject(new Error('El archivo no es un documento vmc-spatial válido.')); return } resolve(p as VmcDocument) } catch { reject(new Error('No se pudo leer el JSON.')) } }
+    reader.onload = () => { try { const p = JSON.parse(String(reader.result)); if (!p || p.schema !== 'vmc-spatial/3') { reject(new Error('El archivo no es un documento vmc-spatial válido.')); return } resolve(p as VmcDocument) } catch { reject(new Error('No se pudo leer el JSON.')) } }
     reader.onerror = () => reject(new Error('Error de lectura del archivo.'))
     reader.readAsText(file)
   })

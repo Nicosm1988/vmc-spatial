@@ -1,11 +1,5 @@
-// ============================================================================
-// Muebles realistas (R3F + Drei), calcados de las fotos reales:
-// - Silla Herman Miller (malla + respaldo con struts en Y, base 5 estrellas).
-// - Monitor curvo ULTRAWIDE ENTERO (un solo panel, segmento de cilindro cóncavo).
-// - Escritorio blanco tipo bench + laptop.
-// - Video wall: panel bronce + grilla de pantallas + credenza blanca.
-// Medidas en METROS. El "frente" de cada mueble mira a -Z local.
-// ============================================================================
+// Muebles realistas (R3F + Drei). Monitor curvo ENTERO (un solo panel cóncavo),
+// silla Herman Miller, escritorio blanco, video wall (grilla + credenza).
 import { RoundedBox } from '@react-three/drei'
 import * as THREE from 'three'
 
@@ -14,101 +8,50 @@ const MESHCOL = '#33333a'
 const FRAME = '#17171b'
 const METAL = '#3a3a42'
 
-// ---- Silla Herman Miller (estilo Cosm/Verus) ----
 export function HermanMillerChair({ x, z, rot = 0 }: { x: number; z: number; rot?: number }) {
   return (
     <group position={[x, 0, z]} rotation={[0, rot, 0]}>
-      {/* Base 5 estrellas + ruedas */}
       {Array.from({ length: 5 }).map((_, i) => {
         const a = (i / 5) * Math.PI * 2
         const lx = Math.sin(a) * 0.28, lz = Math.cos(a) * 0.28
         return (
           <group key={i}>
-            <mesh position={[lx * 0.5, 0.06, lz * 0.5]} rotation={[0, -a, 0]}>
-              <boxGeometry args={[0.06, 0.04, 0.34]} />
-              <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
-            </mesh>
-            <mesh position={[lx, 0.03, lz]}>
-              <cylinderGeometry args={[0.035, 0.035, 0.05, 10]} />
-              <meshStandardMaterial color="#0e0e12" roughness={0.4} metalness={0.5} />
-            </mesh>
+            <mesh position={[lx * 0.5, 0.06, lz * 0.5]} rotation={[0, -a, 0]}><boxGeometry args={[0.06, 0.04, 0.34]} /><meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} /></mesh>
+            <mesh position={[lx, 0.03, lz]}><cylinderGeometry args={[0.035, 0.035, 0.05, 10]} /><meshStandardMaterial color="#0e0e12" roughness={0.4} metalness={0.5} /></mesh>
           </group>
         )
       })}
-      {/* Columna de gas */}
-      <mesh position={[0, 0.28, 0]}>
-        <cylinderGeometry args={[0.04, 0.05, 0.4, 12]} />
-        <meshStandardMaterial color={METAL} roughness={0.35} metalness={0.75} />
-      </mesh>
-      {/* Asiento (malla) */}
-      <RoundedBox args={[0.52, 0.09, 0.5]} radius={0.04} smoothness={3} position={[0, 0.49, 0.02]}>
-        <meshStandardMaterial color={MESHCOL} roughness={0.9} metalness={0.05} />
-      </RoundedBox>
-      {/* Respaldo alto (malla) + marco */}
-      <RoundedBox args={[0.54, 0.72, 0.06]} radius={0.06} smoothness={3} position={[0, 0.92, -0.22]} rotation={[-0.12, 0, 0]}>
-        <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.4} />
-      </RoundedBox>
-      <mesh position={[0, 0.92, -0.205]} rotation={[-0.12, 0, 0]}>
-        <planeGeometry args={[0.44, 0.62]} />
-        <meshStandardMaterial color={MESHCOL} roughness={0.95} metalness={0.02} side={THREE.DoubleSide} transparent opacity={0.92} />
-      </mesh>
-      {/* Struts en Y característicos */}
-      <mesh position={[0, 0.78, -0.19]} rotation={[-0.12, 0, 0.35]}>
-        <boxGeometry args={[0.04, 0.34, 0.03]} /><meshStandardMaterial color={CHARCOAL} roughness={0.5} metalness={0.4} />
-      </mesh>
-      <mesh position={[0, 0.78, -0.19]} rotation={[-0.12, 0, -0.35]}>
-        <boxGeometry args={[0.04, 0.34, 0.03]} /><meshStandardMaterial color={CHARCOAL} roughness={0.5} metalness={0.4} />
-      </mesh>
-      <mesh position={[0, 1.02, -0.2]} rotation={[-0.12, 0, 0]}>
-        <boxGeometry args={[0.04, 0.28, 0.03]} /><meshStandardMaterial color={CHARCOAL} roughness={0.5} metalness={0.4} />
-      </mesh>
-      {/* Apoyabrazos */}
+      <mesh position={[0, 0.28, 0]}><cylinderGeometry args={[0.04, 0.05, 0.4, 12]} /><meshStandardMaterial color={METAL} roughness={0.35} metalness={0.75} /></mesh>
+      <RoundedBox args={[0.52, 0.09, 0.5]} radius={0.04} smoothness={3} position={[0, 0.49, 0.02]}><meshStandardMaterial color={MESHCOL} roughness={0.9} metalness={0.05} /></RoundedBox>
+      <RoundedBox args={[0.54, 0.72, 0.06]} radius={0.06} smoothness={3} position={[0, 0.92, -0.22]} rotation={[-0.12, 0, 0]}><meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.4} /></RoundedBox>
+      <mesh position={[0, 0.92, -0.205]} rotation={[-0.12, 0, 0]}><planeGeometry args={[0.44, 0.62]} /><meshStandardMaterial color={MESHCOL} roughness={0.95} metalness={0.02} side={THREE.DoubleSide} transparent opacity={0.92} /></mesh>
+      <mesh position={[0, 0.78, -0.19]} rotation={[-0.12, 0, 0.35]}><boxGeometry args={[0.04, 0.34, 0.03]} /><meshStandardMaterial color={CHARCOAL} roughness={0.5} metalness={0.4} /></mesh>
+      <mesh position={[0, 0.78, -0.19]} rotation={[-0.12, 0, -0.35]}><boxGeometry args={[0.04, 0.34, 0.03]} /><meshStandardMaterial color={CHARCOAL} roughness={0.5} metalness={0.4} /></mesh>
+      <mesh position={[0, 1.02, -0.2]} rotation={[-0.12, 0, 0]}><boxGeometry args={[0.04, 0.28, 0.03]} /><meshStandardMaterial color={CHARCOAL} roughness={0.5} metalness={0.4} /></mesh>
       {[-1, 1].map((s) => (
         <group key={s}>
           <mesh position={[s * 0.3, 0.66, 0.04]}><boxGeometry args={[0.04, 0.22, 0.04]} /><meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.5} /></mesh>
-          <RoundedBox args={[0.09, 0.05, 0.24]} radius={0.02} smoothness={2} position={[s * 0.3, 0.78, 0.0]}>
-            <meshStandardMaterial color={CHARCOAL} roughness={0.7} metalness={0.2} />
-          </RoundedBox>
+          <RoundedBox args={[0.09, 0.05, 0.24]} radius={0.02} smoothness={2} position={[s * 0.3, 0.78, 0.0]}><meshStandardMaterial color={CHARCOAL} roughness={0.7} metalness={0.2} /></RoundedBox>
         </group>
       ))}
     </group>
   )
 }
 
-// ---- Monitor curvo ULTRAWIDE ENTERO (un solo panel) ----
-// Se construye con un SEGMENTO de cilindro abierto: la cara interna (cóncava)
-// es la pantalla emisiva que mira al usuario (+Z); la externa es la carcasa.
+// Monitor curvo ENTERO (segmento de cilindro cóncavo).
 export function CurvedMonitor({ screen = '#0e2a52', night = false }: { screen?: string; night?: boolean }) {
-  const r = 0.62          // radio de curvatura
-  const th = 1.55         // apertura angular (ancho ultrawide)
-  const start = Math.PI - th / 2  // centrado en la dirección -Z
+  const r = 0.62, th = 1.55, start = Math.PI - th / 2
   const emis = night ? 1.25 : 0.9
-  // El frente del arco (theta=PI) cae en z=-r respecto del eje; ubicamos el
-  // grupo para que ese frente quede a z=-0.30 (borde trasero del escritorio).
   return (
     <group position={[0, 1.07, -0.30 + r]}>
-      {/* Carcasa exterior (convexa, negra) */}
-      <mesh>
-        <cylinderGeometry args={[r + 0.03, r + 0.03, 0.4, 48, 1, true, start, th]} />
-        <meshStandardMaterial color="#0a0a0e" roughness={0.45} metalness={0.35} side={THREE.FrontSide} />
-      </mesh>
-      {/* Pantalla interior (cóncava, emisiva, mira al usuario) */}
-      <mesh>
-        <cylinderGeometry args={[r, r, 0.34, 48, 1, true, start, th]} />
-        <meshStandardMaterial color={screen} emissive={screen} emissiveIntensity={emis} roughness={0.22} side={THREE.BackSide} />
-      </mesh>
-      {/* Pie y base */}
-      <mesh position={[0, -0.3, -r + 0.05]}>
-        <boxGeometry args={[0.05, 0.3, 0.04]} /><meshStandardMaterial color="#1b1b20" roughness={0.4} metalness={0.5} />
-      </mesh>
-      <mesh position={[0, -0.44, -r + 0.11]}>
-        <boxGeometry args={[0.32, 0.03, 0.18]} /><meshStandardMaterial color="#1b1b20" roughness={0.4} metalness={0.5} />
-      </mesh>
+      <mesh><cylinderGeometry args={[r + 0.03, r + 0.03, 0.4, 48, 1, true, start, th]} /><meshStandardMaterial color="#0a0a0e" roughness={0.45} metalness={0.35} side={THREE.FrontSide} /></mesh>
+      <mesh><cylinderGeometry args={[r, r, 0.34, 48, 1, true, start, th]} /><meshStandardMaterial color={screen} emissive={screen} emissiveIntensity={emis} roughness={0.22} side={THREE.BackSide} /></mesh>
+      <mesh position={[0, -0.3, -r + 0.05]}><boxGeometry args={[0.05, 0.3, 0.04]} /><meshStandardMaterial color="#1b1b20" roughness={0.4} metalness={0.5} /></mesh>
+      <mesh position={[0, -0.44, -r + 0.11]}><boxGeometry args={[0.32, 0.03, 0.18]} /><meshStandardMaterial color="#1b1b20" roughness={0.4} metalness={0.5} /></mesh>
     </group>
   )
 }
 
-// ---- Laptop ----
 export function Laptop({ x = 0.42, z = 0.06 }: { x?: number; z?: number }) {
   return (
     <group position={[x, 0.76, z]} rotation={[0, -0.3, 0]}>
@@ -118,13 +61,10 @@ export function Laptop({ x = 0.42, z = 0.06 }: { x?: number; z?: number }) {
   )
 }
 
-// ---- Escritorio blanco tipo bench ----
 export function WhiteDesk() {
   return (
     <group>
-      <RoundedBox args={[1.6, 0.05, 0.85]} radius={0.02} smoothness={3} position={[0, 0.74, 0]}>
-        <meshStandardMaterial color="#eef0f2" roughness={0.4} metalness={0.05} />
-      </RoundedBox>
+      <RoundedBox args={[1.6, 0.05, 0.85]} radius={0.02} smoothness={3} position={[0, 0.74, 0]}><meshStandardMaterial color="#eef0f2" roughness={0.4} metalness={0.05} /></RoundedBox>
       <mesh position={[0, 0.4, -0.3]}><boxGeometry args={[1.5, 0.62, 0.03]} /><meshStandardMaterial color="#e4e6ea" roughness={0.5} metalness={0.05} /></mesh>
       <mesh position={[-0.72, 0.37, 0]}><boxGeometry args={[0.04, 0.72, 0.8]} /><meshStandardMaterial color="#d7dade" roughness={0.5} /></mesh>
       <mesh position={[0.72, 0.37, 0]}><boxGeometry args={[0.04, 0.72, 0.8]} /><meshStandardMaterial color="#d7dade" roughness={0.5} /></mesh>
@@ -133,7 +73,6 @@ export function WhiteDesk() {
   )
 }
 
-// ---- Estación completa ----
 export function Workstation({ x, z, rot = 0, screen = '#0e2a52', night = false }: { x: number; z: number; rot?: number; screen?: string; night?: boolean }) {
   return (
     <group position={[x, 0, z]} rotation={[0, rot, 0]}>
@@ -145,27 +84,22 @@ export function Workstation({ x, z, rot = 0, screen = '#0e2a52', night = false }
   )
 }
 
-// ---- Video wall: panel bronce + grilla de pantallas + credenza blanca ----
 export function VideoWallGrid({ x, z, len, rotY, night, screenColor = '#123a7a' }: { x: number; z: number; len: number; rotY: number; night: boolean; screenColor?: string }) {
   const cols = Math.max(3, Math.round(len / 1.15))
-  const rows = 2
-  const gap = 0.04
-  const sw = len / cols - gap
-  const sh = 0.82
+  const rows = 2, gap = 0.04
+  const sw = len / cols - gap, sh = 0.82
   const emis = night ? 1.6 : 0.95
   const screens: JSX.Element[] = []
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const sx = -len / 2 + sw / 2 + gap / 2 + c * (sw + gap)
-      const sy = 1.55 + r * (sh + gap)
-      const bright = 0.72 + ((r * cols + c) % 4) * 0.09
-      screens.push(
-        <group key={`${r}-${c}`} position={[sx, sy, 0.09]}>
-          <mesh position={[0, 0, -0.01]}><planeGeometry args={[sw, sh]} /><meshStandardMaterial color="#05060a" roughness={0.4} /></mesh>
-          <mesh><planeGeometry args={[sw - 0.03, sh - 0.03]} /><meshStandardMaterial color={screenColor} emissive={screenColor} emissiveIntensity={emis * bright} roughness={0.25} /></mesh>
-        </group>,
-      )
-    }
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const sx = -len / 2 + sw / 2 + gap / 2 + c * (sw + gap)
+    const sy = 1.55 + r * (sh + gap)
+    const bright = 0.72 + ((r * cols + c) % 4) * 0.09
+    screens.push(
+      <group key={`${r}-${c}`} position={[sx, sy, 0.09]}>
+        <mesh position={[0, 0, -0.01]}><planeGeometry args={[sw, sh]} /><meshStandardMaterial color="#05060a" roughness={0.4} /></mesh>
+        <mesh><planeGeometry args={[sw - 0.03, sh - 0.03]} /><meshStandardMaterial color={screenColor} emissive={screenColor} emissiveIntensity={emis * bright} roughness={0.25} /></mesh>
+      </group>,
+    )
   }
   const doors = Math.max(3, Math.round(len / 1.0))
   return (
@@ -183,7 +117,25 @@ export function VideoWallGrid({ x, z, len, rotY, night, screenColor = '#123a7a' 
   )
 }
 
-// ---- Mesa (salas / pods) ----
+export function LongTable({ x, z, w, d, rot = 0, seats = 10 }: { x: number; z: number; w: number; d: number; rot?: number; seats?: number }) {
+  const perSide = Math.floor(seats / 2)
+  return (
+    <group position={[x, 0, z]} rotation={[0, rot, 0]}>
+      <RoundedBox args={[w, 0.06, d]} radius={0.03} smoothness={3} position={[0, 0.74, 0]}><meshStandardMaterial color="#e6e8ec" roughness={0.4} metalness={0.1} /></RoundedBox>
+      <mesh position={[0, 0.37, 0]}><boxGeometry args={[w * 0.9, 0.72, d * 0.3]} /><meshStandardMaterial color="#20242e" roughness={0.6} metalness={0.3} /></mesh>
+      {Array.from({ length: perSide }).map((_, i) => {
+        const sx = -w / 2 + (w / (perSide + 1)) * (i + 1)
+        return (
+          <group key={i}>
+            <HermanMillerChair x={sx} z={d / 2 + 0.35} rot={Math.PI} />
+            <HermanMillerChair x={sx} z={-d / 2 - 0.35} rot={0} />
+          </group>
+        )
+      })}
+    </group>
+  )
+}
+
 export function MeetingTable({ x, z, w, d, color = '#2a3350' }: { x: number; z: number; w: number; d: number; color?: string }) {
   return (
     <group position={[x, 0, z]}>
@@ -193,7 +145,6 @@ export function MeetingTable({ x, z, w, d, color = '#2a3350' }: { x: number; z: 
   )
 }
 
-// ---- Mesa redonda (pods de esquina) ----
 export function RoundTable({ x, z, r = 0.9 }: { x: number; z: number; r?: number }) {
   return (
     <group position={[x, 0, z]}>

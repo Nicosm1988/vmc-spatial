@@ -1,9 +1,13 @@
+// Plano 2D calcado del CAD: contorno facetado (plate), núcleo diamante (core),
+// islas ROTADAS (polígonos), pods redondos, oficinas y sala alargada del frente.
 import { useEffect, useRef, useState } from 'react'
-import type { InsightKey, VmcDocument } from '../types'
+import type { InsightKey, VmcDocument, Zone } from '../types'
 import { center, packDesks, heat } from '../lib/geometry'
-import { toSvgPoints } from '../lib/plate'
+import { toSvgPoints, rotatedRect } from '../lib/plate'
 import { INSIGHTS } from '../lib/insights'
+
 interface Props { doc: VmcDocument; selectedId: string | null; insight: InsightKey; onSelect: (id: string | null) => void }
+
 export default function Plan2D({ doc, selectedId, insight, onSelect }: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const pad = 3500
@@ -27,6 +31,10 @@ export default function Plan2D({ doc, selectedId, insight, onSelect }: Props) {
   const onUp = () => (drag.current = null)
   const insightDef = INSIGHTS[insight]
   const platePts = toSvgPoints(doc.plate)
+  const corePts = toSvgPoints(doc.core)
+
+  const zonePoly = (z: Zone) => toSvgPoints(rotatedRect(z.x, z.y, z.w, z.h, z.rot || 0, z.x + z.w / 2, z.y + z.h / 2))
+
   return (
     <svg ref={svgRef} className="plan-svg" viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
       <defs>
@@ -35,18 +43,27 @@ export default function Plan2D({ doc, selectedId, insight, onSelect }: Props) {
         <radialGradient id="coreGlow" cx="50%" cy="50%" r="60%"><stop offset="0%" stopColor="#0b3a6b" /><stop offset="100%" stopColor="#0a1636" /></radialGradient>
         <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="0" stdDeviation="120" floodColor="#03C1BD" floodOpacity="0.25" /></filter>
       </defs>
+
       {doc.orientacion.map((o, i) => (<text key={i} className="street" x={o.x} y={o.y} textAnchor="middle" transform={o.rot ? `rotate(${o.rot} ${o.x} ${o.y})` : undefined}>{o.texto}</text>))}
-      <polygon points={platePts} fill="url(#floorGrad)" stroke="#03C1BD" strokeWidth={70} filter="url(#soft)" onClick={() => onSelect(null)} />
+
+      {/* Placa (contorno trazado) */}
+      <polygon points={platePts} fill="url(#floorGrad)" stroke="#03C1BD" strokeWidth={80} filter="url(#soft)" onClick={() => onSelect(null)} />
+
       <g clipPath="url(#plateClip)">
         {gridLines(doc.ancho, doc.alto, 2000)}
+
+        {/* Núcleo diamante */}
+        <polygon points={corePts} fill="url(#coreGlow)" stroke="#0E9BC4" strokeWidth={90} />
+
+        {/* Columnas del pasillo del frente */}
+        {doc.columns.map((c, i) => (<circle key={i} cx={c.x} cy={c.y} r={260} fill="#7fb0e0" opacity={0.8} />))}
+
+        {/* Zonas */}
         {doc.zonas.map((z) => {
-          if (z.w <= 0 || z.h <= 0) return null
           const isSel = z.id === selectedId
           const fill = insight === 'none' ? z.color : heat(insightDef.value(z))
           const { cx, cy } = center(z)
-          const isCore = z.kind === 'nucleo'
-          const isPod = z.kind === 'servicio'
-          if (isPod) {
+          if (z.kind === 'pod') {
             const r = Math.min(z.w, z.h) / 2
             return (
               <g key={z.id} onClick={(e) => { e.stopPropagation(); onSelect(z.id) }} style={{ cursor: 'pointer' }}>
@@ -55,26 +72,35 @@ export default function Plan2D({ doc, selectedId, insight, onSelect }: Props) {
               </g>
             )
           }
+          const op = z.kind === 'oficina' ? 0.62 : z.kind === 'salalarga' ? 0.55 : 0.48
           return (
             <g key={z.id} onClick={(e) => { e.stopPropagation(); onSelect(z.id) }} style={{ cursor: 'pointer' }}>
-              <rect x={z.x} y={z.y} width={z.w} height={z.h} rx={220} fill={isCore ? 'url(#coreGlow)' : fill} fillOpacity={isCore ? 1 : (z.kind === 'oficina' ? 0.62 : 0.5)} stroke={isSel ? '#FFD166' : (isCore ? '#0E9BC4' : fill)} strokeWidth={isSel ? 150 : 70} strokeOpacity={0.95} />
-              {z.puestos > 0 && packDesks(z, z.puestos, doc.plate).map((p, i) => (<rect key={i} x={p.x - 850} y={p.y - 500} width={1700} height={1000} rx={90} fill="rgba(4,10,26,0.35)" stroke="rgba(255,255,255,0.35)" strokeWidth={30} />))}
-              <text className="zone-label" x={cx} y={cy - 250} textAnchor="middle">{z.nombre}</text>
-              <text className="zone-sub" x={cx} y={cy + 450} textAnchor="middle">{insight === 'none' ? (z.puestos > 0 ? `${z.puestos} puestos` : kindLabel(z.kind)) : insightDef.readout(z)}</text>
+              <polygon points={zonePoly(z)} fill={fill} fillOpacity={op} stroke={isSel ? '#FFD166' : fill} strokeWidth={isSel ? 150 : 70} strokeOpacity={0.95} />
+              {z.puestos > 0 && packDesks(z, z.puestos, doc.plate).map((p, i) => (
+                <g key={i} transform={`rotate(${((z.rot || 0) * 180) / Math.PI} ${p.x} ${p.y})`}>
+                  <rect x={p.x - 850} y={p.y - 500} width={1700} height={1000} rx={90} fill="rgba(4,10,26,0.35)" stroke="rgba(255,255,255,0.35)" strokeWidth={30} />
+                </g>
+              ))}
+              <text className="zone-label" x={cx} y={cy - 200} textAnchor="middle">{z.nombre}</text>
+              <text className="zone-sub" x={cx} y={cy + 420} textAnchor="middle">{insight === 'none' ? (z.puestos > 0 ? `${z.puestos} puestos` : kindLabel(z.kind)) : insightDef.readout(z)}</text>
             </g>
           )
         })}
-        {doc.videoWalls.map((v) => (<line key={v.id} x1={v.x1} y1={v.y1} x2={v.x2} y2={v.y2} stroke="#27E0FF" strokeWidth={240} strokeLinecap="round" opacity={0.92} />))}
+
+        {/* Video walls */}
+        {doc.videoWalls.map((v) => (<line key={v.id} x1={v.x1} y1={v.y1} x2={v.x2} y2={v.y2} stroke="#27E0FF" strokeWidth={260} strokeLinecap="round" opacity={0.92} />))}
       </g>
-      <g transform={`translate(${doc.ancho - 3800} ${doc.alto - 2600})`}>
-        <circle r={1500} fill="rgba(4,10,26,0.6)" stroke="#03C1BD" strokeWidth={50} />
-        <polygon points="0,-1150 320,300 0,-100 -320,300" fill="#03C1BD" />
-        <text x={0} y={-1750} textAnchor="middle" className="compass">N</text>
+
+      {/* Rosa de los vientos */}
+      <g transform={`translate(${doc.ancho - 3600} ${doc.alto - 2400})`}>
+        <circle r={1400} fill="rgba(4,10,26,0.6)" stroke="#03C1BD" strokeWidth={50} />
+        <polygon points="0,-1050 300,280 0,-90 -300,280" fill="#03C1BD" />
+        <text x={0} y={-1650} textAnchor="middle" className="compass">N</text>
       </g>
     </svg>
   )
 }
-function kindLabel(kind: string): string { switch (kind) { case 'nucleo': return 'Video Walls'; case 'sala': return 'Sala'; case 'oficina': return 'Oficina'; case 'servicio': return 'Pod'; default: return 'Cluster' } }
+function kindLabel(kind: string): string { switch (kind) { case 'sala': return 'Sala'; case 'oficina': return 'Oficina'; case 'salalarga': return 'Sala larga'; case 'pod': return 'Pod'; default: return 'Cluster' } }
 function gridLines(w: number, h: number, step: number) {
   const els: JSX.Element[] = []
   for (let x = 0; x <= w; x += step) els.push(<line key={`gx${x}`} className="grid-line" x1={x} y1={0} x2={x} y2={h} />)
