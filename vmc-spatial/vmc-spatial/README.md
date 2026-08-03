@@ -1,61 +1,55 @@
-# VMC Spatial Studio · Piso 16
+# VMC Spatial Studio · Piso 16 (3D realista)
 
-Gemelo espacial **local-first** del **Piso 16 (Value Management Center)** de YPF — Torre YPF, Macacha Güemes 515, Puerto Madero, CABA. Inspirado en Senda Spatial Studio, con el preset del VMC.
+Gemelo espacial **local-first** del **Piso 16 (Value Management Center)** de YPF — Torre YPF, Puerto Madero, CABA. La vista 3D usa **React Three Fiber + Drei** con muebles, materiales PBR, reflejos de entorno y sombras suaves.
 
-Todo el piso se deriva de **un único documento** (`src/data/vmcPiso16.ts`) con las dimensiones en **milímetros enteros**. El plano 2D, la escena 3D y los mapas de insights se calculan a partir de ese documento.
+Todo se deriva de **un único documento** (`src/data/vmcPiso16.ts`) en **milímetros enteros**.
 
-> ⚠️ **Maqueta conceptual.** No es plano constructivo. Las cotas son aproximadas y se ajustan contra el plano de Obra Civil (PEP 6400-25-011).
+> ⚠️ Maqueta conceptual. Cotas aproximadas; se ajustan contra Obra Civil (PEP 6400-25-011).
 
 ## 🫘 Planta en forma de lente (Torre Pelli)
 
-A diferencia de la v1 (rectangular), esta versión modela la **huella real** de la Torre YPF: una **lente/almendra de ~1.600 m²**, eje largo Este–Oeste. Orientación:
+Huella tipo **lente/almendra de ~1.600 m²**, eje largo Este–Oeste. Norte: Macacha Güemes · Sur: Manuela Sáenz · Oeste: Juana Manso · Este: Río de la Plata.
 
-- **Norte:** Bv. Macacha Güemes
-- **Sur:** Manuela Sáenz
-- **Oeste:** Juana Manso (ciudad)
-- **Este:** Río de la Plata
+## 🪑 Nivel 1 — Realismo
 
-El contorno se genera en `src/lib/plate.ts` (`lensPlate`) y se usa para dibujar el piso, recortar las zonas (clipPath en 2D) y extruir el 3D (`THREE.Shape`).
+- **Estaciones de trabajo reales** por puesto: escritorio + monitor emisivo + silla de oficina (`src/components/Furniture.tsx`), construidas con `RoundedBox` + materiales PBR.
+- **Video walls** emisivos, **salas vidriadas**, **mesa de troubleshooting** con sillas.
+- **`<Environment>` con `<Lightformer>`** → reflejos PBR **sin archivos externos** (100% offline).
+- **`<ContactShadows>`** → sombras suaves de contacto que "apoyan" los muebles en el piso.
+- Piso extruido desde el contorno real de la lente (`THREE.Shape` / `ExtrudeGeometry`).
+
+### 🔜 Cómo subir a GLB reales (Kenney) más adelante
+El sistema queda listo para reemplazar las estaciones por modelos GLB reales:
+1. Descargá el **Furniture Kit de Kenney** (CC0, gratis): https://kenney.nl/assets/furniture-kit
+2. Poné los `.glb` en `public/models/`.
+3. En `Furniture.tsx`, reemplazá el contenido de `Workstation` por `useGLTF('/models/desk.glb')` + `<primitive object={scene} />`.
+   Drei cachea y soporta Draco automáticamente.
+
+## 🧩 Clusters (VMC 10.12.25)
+
+Margen Integrado (43) · Competitividad+EO (37) · Performance (10) · Midstream (8) · Proyectos Especiales (6) · Planificación MID (6) · Núcleo con 4 Video Walls · Troubleshooting · 2 salas de reunión.
 
 ## 🎨 Paleta oficial
 
-Degradado azul-verde **`#0424D9 → #03C1BD`** (Look & Feel VMC).
-
-## 🧩 Clusters (según VMC 10.12.25, slide 7)
-
-- **Oeste:** Margen Integrado (43 puestos, el más grande)
-- **Sur:** Competitividad + EO (37)
-- **Norte:** Performance (10)
-- **Este:** Midstream (8) · Proyectos Especiales (6)
-- **Centro:** Núcleo con 4 Video Walls · Mesa de Troubleshooting · Salas de reunión
-- Planificación MID (6)
-
-## ✨ Funcionalidad
-
-- **Plano 2D (SVG):** pan, zoom, click para seleccionar, calles + rosa de los vientos, zonas recortadas al contorno real.
-- **Vista 3D (Three.js):** piso extruido con la forma de lente, video walls iluminados, día/noche, techo on/off, fallback sin WebGL.
-- **Modos:** Explorar / Editar 2D / Editar 3D.
-- **Inspector:** nombre, color, puestos, ocupación, % datalización, cotas y notas — en vivo.
-- **Insights:** Ocupación · Densidad · Capacidad · **% Datalización**.
-- **Persistencia:** autoguardado en localStorage. Import / Export JSON.
+Azul-verde **`#0424D9 → #03C1BD`** (Look & Feel VMC).
 
 ## 🧱 Stack
 
-Vite + React + TypeScript + Three.js. **Sin backend.** El build lo hace Vercel en la nube.
+Vite + React + TypeScript + **@react-three/fiber** + **@react-three/drei** + three. Sin backend. El build lo hace Vercel en la nube.
 
 ## 🚀 Local (opcional, Node 18+)
 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm run build    # genera /dist
+npm run build    # /dist
 ```
 
 ## ☁️ Deploy
 
 Vercel detecta `vercel.json` (framework Vite) y corre `vite build` en cada push a `main`. **Root Directory** debe apuntar a la carpeta que contiene `package.json`.
 
-## 📐 Ajustar dimensiones
+## 📐 Ajustar
 
-- La forma de la lente: parámetros `halfL`, `halfW`, `pointiness` en `src/data/vmcPiso16.ts`.
-- Cada cluster: `x, y, w, h` en **mm**. También desde el **Inspector** en modo Editar → Exportar JSON.
+- Forma de la lente: `halfL`, `halfW`, `pointiness` en `src/data/vmcPiso16.ts`.
+- Cada cluster: `x, y, w, h` en mm, o desde el **Inspector** (Editar) → Exportar JSON.

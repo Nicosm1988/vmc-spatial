@@ -1,14 +1,21 @@
 // ============================================================================
-// Escena 3D con Three.js. El piso se extruye desde el contorno REAL de la
-// planta (lente Pelli) con THREE.Shape. Zonas como volúmenes, video walls
-// iluminados, hot desks, OrbitControls, día/noche y techo on/off.
+// Escena 3D REALISTA con React Three Fiber + Drei.
+// - Piso extruido desde el contorno de la lente (Torre Pelli).
+// - Estaciones de trabajo reales (escritorio + monitor + silla) por puesto.
+// - Video walls emisivos, salas vidriadas, mesa de troubleshooting.
+// - Environment con Lightformers (reflejos PBR, 100% offline) + ContactShadows.
+// Todo se deriva del mismo documento JSON (data-driven).
 // ============================================================================
-import { useEffect, useRef } from 'react'
+import { useMemo } from 'react'
+import { Canvas } from '@react-three/fiber'
+import {
+  OrbitControls, Environment, Lightformer, ContactShadows, RoundedBox, Edges,
+} from '@react-three/drei'
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import type { InsightKey, VmcDocument } from '../types'
-import { toM, packDesks, heat } from '../lib/geometry'
+import type { InsightKey, Point, VmcDocument, Zone } from '../types'
+import { toM, packDesks, center, heat } from '../lib/geometry'
 import { INSIGHTS } from '../lib/insights'
+import { Workstation, VideoWallMesh, Table, Chair } from './Furniture'
 
 interface Props {
   doc: VmcDocument
@@ -19,196 +26,204 @@ interface Props {
   onSelect: (id: string | null) => void
 }
 
+// Geometría del piso (lente) extruida, memoizada.
+function useFloorGeo(plate: Point[]) {
+  return useMemo(() => {
+    const s = new THREE.Shape()
+    plate.forEach((p, i) => {
+      const x = toM(p.x), z = toM(p.y)
+      if (i === 0) s.moveTo(x, z); else s.lineTo(x, z)
+    })
+    s.closePath()
+    const g = new THREE.ExtrudeGeometry(s, { depth: 0.3, bevelEnabled: false })
+    g.rotateX(Math.PI / 2)
+    return g
+  }, [plate])
+}
+
+function cursor(on: boolean) {
+  document.body.style.cursor = on ? 'pointer' : 'auto'
+}
+
+// Un cluster: pad translúcido + puestos (estaciones de trabajo).
+function Cluster({
+  z, plate, cx, cz, fill, selected, onSelect,
+}: {
+  z: Zone; plate: Point[]; cx: number; cz: number
+  fill: string; selected: boolean; onSelect: (id: string) => void
+}) {
+  const x = toM(z.x), zz = toM(z.y), w = toM(z.w), h = toM(z.h)
+  const px = x + w / 2, pz = zz + h / 2
+  const desks = packDesks(z, z.puestos, plate)
+  return (
+    <group>
+      {/* Pad del cluster */}
+      <RoundedBox
+        args={[w, 0.05, h]} radius={0.05} smoothness={2} position={[px, 0.03, pz]}
+        onClick={(e) => { e.stopPropagation(); onSelect(z.id) }}
+        onPointerOver={(e) => { e.stopPropagation(); cursor(true) }}
+        onPointerOut={() => cursor(false)}
+      >
+        <meshStandardMaterial color={fill} roughness={0.5} metalness={0.1} transparent opacity={0.42} />
+        {selected && <Edges color="#ffd166" />}
+      </RoundedBox>
+      {/* Estaciones de trabajo, orientadas hacia el núcleo */}
+      {desks.map((d, i) => {
+        const dx = toM(d.x), dz = toM(d.y)
+        const rot = Math.atan2(cz - dz, cx - dx) - Math.PI / 2
+        return <Workstation key={i} x={dx} z={dz} rot={rot} screen={fill} />
+      })}
+    </group>
+  )
+}
+
 export default function Scene3D({ doc, selectedId, insight, noche, techo, onSelect }: Props) {
-  const mountRef = useRef<HTMLDivElement | null>(null)
-  const ctx = useRef<any>(null)
+  const floorGeo = useFloorGeo(doc.plate)
+  const cx = toM(doc.ancho) / 2
+  const cz = toM(doc.alto) / 2
+  const insightDef = INSIGHTS[insight]
 
-  // Montaje único.
-  useEffect(() => {
-    const mount = mountRef.current
-    if (!mount) return
+  const bg = noche ? '#03060f' : '#060c1c'
 
-    const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x050a1a)
+  return (
+    <Canvas
+      shadows
+      dpr={[1, 1.75]}
+      camera={{ position: [cx, 44, cz + 58], fov: 45 }}
+      gl={{ antialias: true }}
+    >
+      <color attach="background" args={[bg]} />
+      <fog attach="fog" args={[bg, 70, 190]} />
 
-    const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 3000)
-    const W = toM(doc.ancho)
-    const H = toM(doc.alto)
-    camera.position.set(W * 0.5, Math.max(W, H) * 0.8, H * 1.15)
+      {/* Luz ambiente + key con sombra */}
+      <ambientLight intensity={noche ? 0.28 : 0.6} />
+      <directionalLight
+        position={[cx - 26, 42, cz - 16]}
+        intensity={noche ? 0.5 : 1.15}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+      >
+        <orthographicCamera attach="shadow-camera" args={[-45, 45, 45, -45, 0.1, 160]} />
+      </directionalLight>
 
-    let renderer: THREE.WebGLRenderer
-    try {
-      renderer = new THREE.WebGLRenderer({ antialias: true })
-    } catch {
-      mount.innerHTML = '<div style="padding:24px;color:#9fb0d4;font-size:14px">Tu navegador no soporta WebGL. Usá la vista 2D.</div>'
-      return
-    }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
-    renderer.setSize(mount.clientWidth, mount.clientHeight)
-    renderer.shadowMap.enabled = true
-    mount.appendChild(renderer.domElement)
+      {/* Piso (lente) */}
+      <mesh geometry={floorGeo} position={[0, -0.02, 0]} receiveShadow onClick={() => onSelect(null)}>
+        <meshStandardMaterial color="#0a1836" roughness={0.85} metalness={0.12} />
+      </mesh>
+      {/* Zócalo luminoso del contorno */}
+      <mesh geometry={floorGeo} position={[0, 0, 0]}>
+        <meshBasicMaterial color="#03c1bd" wireframe transparent opacity={0.12} />
+      </mesh>
 
-    const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true
-    controls.dampingFactor = 0.08
-    controls.target.set(W * 0.5, 0, H * 0.5)
+      {/* Clusters con estaciones de trabajo */}
+      {doc.zonas
+        .filter((z) => z.kind === 'cluster')
+        .map((z) => {
+          const fill = insight === 'none' ? z.color : heat(insightDef.value(z))
+          return (
+            <Cluster
+              key={z.id} z={z} plate={doc.plate} cx={cx} cz={cz}
+              fill={fill} selected={z.id === selectedId} onSelect={onSelect}
+            />
+          )
+        })}
 
-    const raycaster = new THREE.Raycaster()
-    const pointer = new THREE.Vector2()
-    const world = new THREE.Group()
-    scene.add(world)
+      {/* Núcleo: plataforma central */}
+      {doc.zonas.filter((z) => z.kind === 'nucleo').map((z) => {
+        const x = toM(z.x), zz = toM(z.y), w = toM(z.w), h = toM(z.h)
+        return (
+          <group key={z.id}>
+            <RoundedBox
+              args={[w, 0.25, h]} radius={0.06} smoothness={2} position={[x + w / 2, 0.12, zz + h / 2]}
+              onClick={(e) => { e.stopPropagation(); onSelect(z.id) }}
+              onPointerOver={(e) => { e.stopPropagation(); cursor(true) }}
+              onPointerOut={() => cursor(false)}
+            >
+              <meshStandardMaterial color="#0a1636" roughness={0.6} metalness={0.25} />
+              {z.id === selectedId && <Edges color="#ffd166" />}
+            </RoundedBox>
+          </group>
+        )
+      })}
 
-    let raf = 0
-    const animate = () => { controls.update(); renderer.render(scene, camera); raf = requestAnimationFrame(animate) }
-    animate()
+      {/* Video walls */}
+      {doc.videoWalls.map((v) => {
+        const x1 = toM(v.x1), y1 = toM(v.y1), x2 = toM(v.x2), y2 = toM(v.y2)
+        const len = Math.hypot(x2 - x1, y2 - y1)
+        const angle = Math.atan2(y2 - y1, x2 - x1)
+        return (
+          <VideoWallMesh key={v.id} x={(x1 + x2) / 2} z={(y1 + y2) / 2} len={len} angle={angle} night={noche} />
+        )
+      })}
 
-    const onResize = () => {
-      camera.aspect = mount.clientWidth / mount.clientHeight
-      camera.updateProjectionMatrix()
-      renderer.setSize(mount.clientWidth, mount.clientHeight)
-    }
-    window.addEventListener('resize', onResize)
+      {/* Mesa de troubleshooting + sillas */}
+      {doc.zonas.filter((z) => z.kind === 'troubleshooting').map((z) => {
+        const { cx: mcx, cy: mcy } = center(z)
+        const tx = toM(mcx), tz = toM(mcy), w = toM(z.w) * 0.7, d = toM(z.h) * 0.7
+        return (
+          <group key={z.id}
+            onClick={(e) => { e.stopPropagation(); onSelect(z.id) }}
+            onPointerOver={(e) => { e.stopPropagation(); cursor(true) }}
+            onPointerOut={() => cursor(false)}
+          >
+            <Table x={tx} z={tz} w={w} d={d} color={z.color} />
+            <Chair x={tx - w / 2 - 0.4} z={tz} rot={Math.PI / 2} />
+            <Chair x={tx + w / 2 + 0.4} z={tz} rot={-Math.PI / 2} />
+          </group>
+        )
+      })}
 
-    const onClick = (ev: MouseEvent) => {
-      const rect = renderer.domElement.getBoundingClientRect()
-      pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1
-      pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1
-      raycaster.setFromCamera(pointer, camera)
-      const hits = raycaster.intersectObjects(world.children, true)
-      const hit = hits.find((h) => (h.object as any).userData?.zoneId)
-      onSelect(hit ? (hit.object as any).userData.zoneId : null)
-    }
-    renderer.domElement.addEventListener('click', onClick)
+      {/* Salas de reunión: caja vidriada + mesa + sillas */}
+      {doc.zonas.filter((z) => z.kind === 'sala').map((z) => {
+        const x = toM(z.x), zz = toM(z.y), w = toM(z.w), h = toM(z.h)
+        const rcx = x + w / 2, rcz = zz + h / 2
+        return (
+          <group key={z.id}
+            onClick={(e) => { e.stopPropagation(); onSelect(z.id) }}
+            onPointerOver={(e) => { e.stopPropagation(); cursor(true) }}
+            onPointerOut={() => cursor(false)}
+          >
+            {/* Vidrio */}
+            <mesh position={[rcx, 1.35, rcz]}>
+              <boxGeometry args={[w, 2.7, h]} />
+              <meshStandardMaterial color="#8fd6ff" transparent opacity={0.14} roughness={0.1} metalness={0.2} />
+              {z.id === selectedId && <Edges color="#ffd166" />}
+            </mesh>
+            <Table x={rcx} z={rcz} w={w * 0.5} d={h * 0.45} color="#2a3350" />
+            <Chair x={rcx - w * 0.28} z={rcz} rot={Math.PI / 2} />
+            <Chair x={rcx + w * 0.28} z={rcz} rot={-Math.PI / 2} />
+          </group>
+        )
+      })}
 
-    ctx.current = { scene, camera, renderer, controls, world, mount }
-    return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', onResize)
-      renderer.domElement.removeEventListener('click', onClick)
-      controls.dispose(); renderer.dispose()
-      if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
-      ctx.current = null
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+      {/* Techo opcional */}
+      {techo && (
+        <mesh geometry={floorGeo} position={[0, toM(doc.alturaLibre), 0]}>
+          <meshStandardMaterial color="#0e1c3c" transparent opacity={0.18} side={THREE.DoubleSide} />
+        </mesh>
+      )}
 
-  // Reconstrucción del contenido.
-  useEffect(() => {
-    const c = ctx.current
-    if (!c) return
-    const { scene, world } = c
-    while (world.children.length) world.remove(world.children[0])
-    scene.children.filter((o: any) => o.isLight).forEach((l: any) => scene.remove(l))
+      {/* Sombras de contacto suaves (grounding realista) */}
+      <ContactShadows
+        position={[cx, 0.04, cz]} scale={90} blur={2.6} opacity={0.5} far={30}
+        resolution={1024} color="#02040a"
+      />
 
-    const insightDef = INSIGHTS[insight]
-    const W = toM(doc.ancho)
-    const H = toM(doc.alto)
+      {/* Entorno de reflejos construido con Lightformers (sin archivos externos) */}
+      <Environment resolution={256}>
+        <Lightformer intensity={noche ? 0.5 : 1.3} position={[0, 12, 0]} scale={[24, 24, 1]} rotation-x={Math.PI / 2} />
+        <Lightformer intensity={0.7} position={[14, 6, -12]} scale={[10, 10, 1]} color="#ffffff" />
+        <Lightformer intensity={0.7} position={[-14, 6, 12]} scale={[10, 10, 1]} color="#27e0ff" />
+        <Lightformer intensity={0.5} position={[0, 6, 18]} scale={[14, 6, 1]} color="#0424d9" />
+      </Environment>
 
-    // ---- Piso extruido desde el contorno de la lente ----
-    const shape = new THREE.Shape()
-    doc.plate.forEach((p, i) => {
-      const x = toM(p.x)
-      const z = toM(p.y)
-      if (i === 0) shape.moveTo(x, z)
-      else shape.lineTo(x, z)
-    })
-    shape.closePath()
-    const slabGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.25, bevelEnabled: false })
-    // ExtrudeGeometry extruye en +Z; rotamos para que quede horizontal (plano XZ).
-    slabGeo.rotateX(Math.PI / 2)
-    const slabMat = new THREE.MeshStandardMaterial({ color: 0x08183a, roughness: 0.9, metalness: 0.05 })
-    const slab = new THREE.Mesh(slabGeo, slabMat)
-    slab.position.y = 0
-    slab.receiveShadow = true
-    world.add(slab)
-
-    // Borde luminoso (contorno).
-    const edgePts = doc.plate.map((p) => new THREE.Vector3(toM(p.x), 0.28, toM(p.y)))
-    edgePts.push(edgePts[0].clone())
-    const edgeGeo = new THREE.BufferGeometry().setFromPoints(edgePts)
-    const edge = new THREE.Line(edgeGeo, new THREE.LineBasicMaterial({ color: 0x03c1bd }))
-    world.add(edge)
-
-    // ---- Zonas ----
-    doc.zonas.forEach((z) => {
-      if (z.w <= 0 || z.h <= 0) return
-      const zw = toM(z.w), zh = toM(z.h), zx = toM(z.x), zy = toM(z.y)
-      const height = z.kind === 'nucleo' ? 0.55 : z.kind === 'sala' ? 1.5 : z.kind === 'troubleshooting' ? 0.95 : 0.45
-      const colHex = insight === 'none' ? z.color : heat(insightDef.value(z))
-      const isSel = z.id === selectedId
-      const mat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(colHex),
-        roughness: 0.6, metalness: 0.15,
-        emissive: new THREE.Color(isSel ? 0x4a3a00 : 0x000000),
-        transparent: true, opacity: z.kind === 'cluster' ? 0.8 : 0.95,
-      })
-      const geo = new THREE.BoxGeometry(zw, height, zh)
-      const mesh = new THREE.Mesh(geo, mat)
-      mesh.position.set(zx + zw / 2, height / 2 + 0.28, zy + zh / 2)
-      mesh.castShadow = true; mesh.receiveShadow = true
-      ;(mesh as any).userData = { zoneId: z.id }
-      world.add(mesh)
-
-      if (isSel) {
-        const line = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffd166 }))
-        line.position.copy(mesh.position)
-        world.add(line)
-      }
-
-      if (z.puestos > 0) {
-        const deskGeo = new THREE.BoxGeometry(1.2, 0.75, 0.7)
-        const deskMat = new THREE.MeshStandardMaterial({ color: 0x0a1836, roughness: 0.8 })
-        packDesks(z, z.puestos, doc.plate).forEach((p) => {
-          const d = new THREE.Mesh(deskGeo, deskMat)
-          d.position.set(toM(p.x), height + 0.5, toM(p.y))
-          d.castShadow = true
-          ;(d as any).userData = { zoneId: z.id }
-          world.add(d)
-        })
-      }
-    })
-
-    // ---- Video walls ----
-    doc.videoWalls.forEach((v) => {
-      const x1 = toM(v.x1), y1 = toM(v.y1), x2 = toM(v.x2), y2 = toM(v.y2)
-      const len = Math.hypot(x2 - x1, y2 - y1)
-      const panel = new THREE.Mesh(
-        new THREE.BoxGeometry(len, 2.4, 0.15),
-        new THREE.MeshStandardMaterial({
-          color: 0x0a2540, emissive: new THREE.Color(0x27e0ff),
-          emissiveIntensity: noche ? 1.3 : 0.55, roughness: 0.3,
-        }),
-      )
-      panel.position.set((x1 + x2) / 2, 1.4, (y1 + y2) / 2)
-      panel.rotation.y = -Math.atan2(y2 - y1, x2 - x1)
-      world.add(panel)
-    })
-
-    // ---- Techo opcional ----
-    if (techo) {
-      const roofShape = new THREE.Shape()
-      doc.plate.forEach((p, i) => {
-        const x = toM(p.x), z = toM(p.y)
-        if (i === 0) roofShape.moveTo(x, z); else roofShape.lineTo(x, z)
-      })
-      roofShape.closePath()
-      const roofGeo = new THREE.ExtrudeGeometry(roofShape, { depth: 0.08, bevelEnabled: false })
-      roofGeo.rotateX(Math.PI / 2)
-      const roof = new THREE.Mesh(roofGeo, new THREE.MeshStandardMaterial({ color: 0x0e1c3c, transparent: true, opacity: 0.22, side: THREE.DoubleSide }))
-      roof.position.y = toM(doc.alturaLibre)
-      world.add(roof)
-    }
-
-    // ---- Luces ----
-    scene.add(new THREE.AmbientLight(0xffffff, noche ? 0.4 : 0.75))
-    const key = new THREE.DirectionalLight(0xffffff, noche ? 0.6 : 1.1)
-    key.position.set(W * 0.3, 45, H * 0.1); key.castShadow = true
-    key.shadow.mapSize.set(1024, 1024); key.shadow.camera.far = 250
-    scene.add(key)
-    const fill = new THREE.DirectionalLight(0x27e0ff, noche ? 0.55 : 0.4)
-    fill.position.set(W * 0.8, 28, H * 0.9)
-    scene.add(fill)
-  }, [doc, selectedId, insight, noche, techo])
-
-  return <div ref={mountRef} className="scene-canvas" />
+      <OrbitControls
+        target={[cx, 0, cz]}
+        enableDamping dampingFactor={0.08}
+        maxPolarAngle={Math.PI / 2.15}
+        minDistance={18} maxDistance={150}
+      />
+    </Canvas>
+  )
 }

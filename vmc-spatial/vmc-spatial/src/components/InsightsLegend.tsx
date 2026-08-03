@@ -1,4 +1,3 @@
-// Leyenda flotante del insight activo (barra frío→caliente).
 import type { InsightKey } from '../types'
 import { INSIGHTS } from '../lib/insights'
 

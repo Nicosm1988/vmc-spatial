@@ -1,7 +1,3 @@
-// ============================================================================
-// Persistencia local. Autoguardado en localStorage (~700 ms). El JSON
-// exportado es el respaldo portable recomendado.
-// ============================================================================
 import type { VmcDocument } from '../types'
 
 const KEY = 'vmc-spatial:doc:v2'
@@ -11,59 +7,33 @@ export function loadDoc(): VmcDocument | null {
     const raw = localStorage.getItem(KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (parsed && parsed.schema === 'vmc-spatial/2') return parsed as VmcDocument
-    return null
-  } catch {
-    return null
-  }
+    return parsed && parsed.schema === 'vmc-spatial/2' ? (parsed as VmcDocument) : null
+  } catch { return null }
 }
-
 export function saveDoc(doc: VmcDocument): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(doc))
-  } catch {
-    /* modo privado o storage lleno */
-  }
+  try { localStorage.setItem(KEY, JSON.stringify(doc)) } catch { /* noop */ }
 }
-
 export function clearDoc(): void {
-  try {
-    localStorage.removeItem(KEY)
-  } catch {
-    /* noop */
-  }
+  try { localStorage.removeItem(KEY) } catch { /* noop */ }
 }
-
 export function exportJson(doc: VmcDocument): void {
   const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url
-  a.download = `vmc-piso16-${Date.now()}.json`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
+  a.href = url; a.download = `vmc-piso16-${Date.now()}.json`
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
-
 export function importJson(file: File): Promise<VmcDocument> {
   return new Promise((resolve, reject) => {
-    if (file.size > 5 * 1024 * 1024) {
-      reject(new Error('El archivo supera los 5 MB.'))
-      return
-    }
+    if (file.size > 5 * 1024 * 1024) { reject(new Error('El archivo supera los 5 MB.')); return }
     const reader = new FileReader()
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result))
-        if (!parsed || parsed.schema !== 'vmc-spatial/2') {
-          reject(new Error('El archivo no es un documento vmc-spatial válido.'))
-          return
-        }
+        if (!parsed || parsed.schema !== 'vmc-spatial/2') { reject(new Error('El archivo no es un documento vmc-spatial válido.')); return }
         resolve(parsed as VmcDocument)
-      } catch {
-        reject(new Error('No se pudo leer el JSON.'))
-      }
+      } catch { reject(new Error('No se pudo leer el JSON.')) }
     }
     reader.onerror = () => reject(new Error('Error de lectura del archivo.'))
     reader.readAsText(file)
