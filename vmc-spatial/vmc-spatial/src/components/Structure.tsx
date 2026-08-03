@@ -1,11 +1,5 @@
 import type { VmcDocument } from '../types'
-
-interface Props {
-  doc: VmcDocument
-  selectedId: string | null
-  onSelect: (id: string | null) => void
-}
-
+interface Props { doc: VmcDocument; selectedId: string | null; onSelect: (id: string | null) => void }
 export default function Structure({ doc, selectedId, onSelect }: Props) {
   const totalPuestos = doc.zonas.reduce((s, z) => s + z.puestos, 0)
   const totalPantallas = doc.videoWalls.reduce((s, v) => s + v.pantallas, 0)
@@ -32,10 +26,5 @@ export default function Structure({ doc, selectedId, onSelect }: Props) {
   )
 }
 function tipo(kind: string): string {
-  switch (kind) {
-    case 'nucleo': return 'núcleo'
-    case 'sala': return 'sala'
-    case 'troubleshooting': return 'mesa'
-    default: return '—'
-  }
+  switch (kind) { case 'nucleo': return 'núcleo'; case 'sala': return 'sala'; case 'troubleshooting': return 'mesa'; default: return '—' }
 }

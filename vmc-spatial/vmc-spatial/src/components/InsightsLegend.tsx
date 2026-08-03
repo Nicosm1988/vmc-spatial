@@ -1,6 +1,5 @@
 import type { InsightKey } from '../types'
 import { INSIGHTS } from '../lib/insights'
-
 export default function InsightsLegend({ insight }: { insight: InsightKey }) {
   if (insight === 'none') return null
   const def = INSIGHTS[insight]

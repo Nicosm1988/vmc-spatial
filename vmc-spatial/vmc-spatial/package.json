@@ -1,9 +1,9 @@
 {
   "name": "vmc-spatial",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
-  "description": "VMC Spatial Studio - Gemelo espacial del Piso 16 (VMC) de YPF · 3D realista con React Three Fiber",
+  "description": "VMC Spatial Studio - Gemelo espacial del Piso 16 (VMC) de YPF · 3D realista",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

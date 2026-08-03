@@ -1,23 +1,22 @@
 // ============================================================================
 // PRESET · VMC Piso 16 — Torre YPF, Puerto Madero, CABA.
-// Planta tipo LENTE (Pelli), eje largo Este–Oeste. Clusters según VMC 10.12.25.
-// Maqueta conceptual; cotas aproximadas (ajustar contra Obra Civil 6400-25-011).
+// Distribución basada en el PLANO CAD real (lente Pelli). Nombres del LAY OUT:
+// perímetro con Data & Information Excellence, Machine Learning & AI, Performance,
+// Control Tower, Troubleshooting (punta Este), Operational License & Excellence,
+// Control Execution (x2), Business Digital Twin. Núcleo de servicio central con
+// 4 video walls (grilla de pantallas sobre credenzas). Cotas aproximadas.
 // ============================================================================
 import type { VmcDocument } from '../types'
 import { lensPlate } from '../lib/plate'
 
 const ANCHO = 62000
 const ALTO = 40000
+const PLATE = lensPlate({ cx: ANCHO / 2, cy: ALTO / 2, halfL: 29000, halfW: 16500, pointiness: 0.6, steps: 72 })
 
-const PLATE = lensPlate({
-  cx: ANCHO / 2, cy: ALTO / 2,
-  halfL: 29000, halfW: 16500, pointiness: 0.6, steps: 72,
-})
-
-// Paleta oficial VMC (Look & Feel): #0424D9 → #03C1BD.
 const C = {
-  margen: '#1a3fd6', performance: '#1657ce', midstream: '#1a73c6', proy: '#0e9bc4',
-  competitividad: '#03c1bd', planif: '#17a9a0', nucleo: '#0a1636', sala: '#3b4a6b', trouble: '#e8a33d',
+  data: '#0e9bc4', ml: '#5b6cf0', perf: '#1657ce', tower: '#1a73c6',
+  trouble: '#e8a33d', opex: '#17a9a0', ctrlE: '#03c1bd', ctrlW: '#10a5b8',
+  bdt: '#3457a6', core: '#0a1636', sala: '#3b4a6b',
 }
 
 export const VMC_PISO_16: VmcDocument = {
@@ -27,27 +26,30 @@ export const VMC_PISO_16: VmcDocument = {
   ancho: ANCHO, alto: ALTO, alturaLibre: 2900,
   plate: PLATE,
   actualizado: new Date().toISOString(),
-
   zonas: [
-    { id: 'nucleo', nombre: 'Núcleo · Video Walls', kind: 'nucleo', x: 25000, y: 15500, w: 12000, h: 9000, color: C.nucleo, puestos: 0, ocupacion: 100, datalizacion: 95, nota: '4 Video Walls (+90 pantallas) con la cadena de valor MIDDW.' },
-    { id: 'margen-integrado', nombre: 'Margen Integrado', kind: 'cluster', x: 6500, y: 12000, w: 17000, h: 16000, color: C.margen, puestos: 43, ocupacion: 88, datalizacion: 60, nota: 'Cluster más grande (43 puestos).' },
-    { id: 'competitividad-eo', nombre: 'Competitividad + EO', kind: 'cluster', x: 22000, y: 26500, w: 18000, h: 8500, color: C.competitividad, puestos: 37, ocupacion: 80, datalizacion: 55, nota: 'Competitividad (26) + Excelencia Operacional (11).' },
-    { id: 'performance', nombre: 'Performance', kind: 'cluster', x: 24000, y: 6000, w: 15000, h: 8000, color: C.performance, puestos: 10, ocupacion: 82, datalizacion: 70, nota: 'Analítica y Performance, Soluciones Transversales.' },
-    { id: 'midstream', nombre: 'Midstream', kind: 'cluster', x: 39000, y: 15500, w: 10000, h: 9000, color: C.midstream, puestos: 8, ocupacion: 70, datalizacion: 62, nota: 'Planificación y gestión Midstream.' },
-    { id: 'proy-especiales', nombre: 'Proyectos Especiales', kind: 'cluster', x: 48500, y: 17000, w: 8500, h: 6000, color: C.proy, puestos: 6, ocupacion: 60, datalizacion: 72, nota: 'Proyectos especiales (punta Este, vista al río).' },
-    { id: 'planificacion-mid', nombre: 'Planificación MID', kind: 'cluster', x: 22000, y: 12000, w: 9000, h: 3500, color: C.planif, puestos: 6, ocupacion: 65, datalizacion: 50, nota: 'Planificación Midstream.' },
-    { id: 'troubleshooting', nombre: 'Mesa de Troubleshooting', kind: 'troubleshooting', x: 25000, y: 11500, w: 12000, h: 3500, color: C.trouble, puestos: 0, ocupacion: 90, datalizacion: 80, nota: 'Mesa central de resolución de problemas.' },
-    { id: 'sala-1', nombre: 'Sala de Reunión 1', kind: 'sala', x: 25000, y: 25000, w: 5700, h: 4200, color: C.sala, puestos: 0, ocupacion: 45, datalizacion: 30, nota: 'Sala de reunión.' },
-    { id: 'sala-2', nombre: 'Sala de Reunión 2', kind: 'sala', x: 31300, y: 25000, w: 5700, h: 4200, color: C.sala, puestos: 0, ocupacion: 35, datalizacion: 30, nota: 'Sala de reunión.' },
+    { id: 'core', nombre: 'Núcleo de servicio', kind: 'nucleo', x: 24000, y: 13500, w: 14000, h: 13000, color: C.core, puestos: 0, ocupacion: 100, datalizacion: 95, nota: 'Núcleo central (ascensores/escaleras). 4 Video Walls en sus caras.' },
+    // NORTE (Macacha Güemes), Oeste -> Este
+    { id: 'data-info', nombre: 'Data & Information Excellence', kind: 'cluster', x: 8000, y: 9000, w: 9000, h: 6000, color: C.data, puestos: 12, ocupacion: 70, datalizacion: 92, nota: 'Excelencia de datos e información (NO).' },
+    { id: 'ml-ai', nombre: 'Machine Learning & AI', kind: 'cluster', x: 20000, y: 6500, w: 8000, h: 5000, color: C.ml, puestos: 8, ocupacion: 55, datalizacion: 90, nota: 'Modelos de ML y agentes de IA (N).' },
+    { id: 'performance', nombre: 'Performance', kind: 'cluster', x: 30000, y: 6500, w: 8000, h: 5000, color: C.perf, puestos: 10, ocupacion: 82, datalizacion: 70, nota: 'Monitoreo de KPI (N).' },
+    { id: 'control-tower', nombre: 'Control Tower', kind: 'cluster', x: 41000, y: 9000, w: 9000, h: 6000, color: C.tower, puestos: 10, ocupacion: 75, datalizacion: 78, nota: 'Torre de control (NE).' },
+    // ESTE (río): Troubleshooting
+    { id: 'troubleshooting', nombre: 'Troubleshooting', kind: 'troubleshooting', x: 51000, y: 16000, w: 7000, h: 8000, color: C.trouble, puestos: 0, ocupacion: 90, datalizacion: 80, nota: 'Mesa de resolución de problemas (punta Este).' },
+    // SUR (Manuela Sáenz), Este -> Oeste
+    { id: 'opex', nombre: 'Operational License & Excellence', kind: 'cluster', x: 41000, y: 25000, w: 9000, h: 6000, color: C.opex, puestos: 12, ocupacion: 78, datalizacion: 60, nota: 'Licencia y excelencia operacional (SE).' },
+    { id: 'control-exec-e', nombre: 'Control Execution', kind: 'cluster', x: 30000, y: 28500, w: 8000, h: 5000, color: C.ctrlE, puestos: 12, ocupacion: 80, datalizacion: 68, nota: 'Control Execution (S).' },
+    { id: 'control-exec-w', nombre: 'Control Execution', kind: 'cluster', x: 20000, y: 28500, w: 8000, h: 5000, color: C.ctrlW, puestos: 12, ocupacion: 80, datalizacion: 66, nota: 'Control Execution (S).' },
+    { id: 'business-digital-twin', nombre: 'Business Digital Twin', kind: 'cluster', x: 8000, y: 25000, w: 9000, h: 6000, color: C.bdt, puestos: 10, ocupacion: 60, datalizacion: 85, nota: 'Gemelo digital del negocio (SO).' },
+    // Salas de reunión (Oeste del núcleo)
+    { id: 'sala-1', nombre: 'Sala de Reunión 1', kind: 'sala', x: 17800, y: 14000, w: 4800, h: 4200, color: C.sala, puestos: 0, ocupacion: 45, datalizacion: 30, nota: 'Sala de reunión vidriada.' },
+    { id: 'sala-2', nombre: 'Sala de Reunión 2', kind: 'sala', x: 17800, y: 21800, w: 4800, h: 4200, color: C.sala, puestos: 0, ocupacion: 35, datalizacion: 30, nota: 'Sala de reunión vidriada.' },
   ],
-
   videoWalls: [
-    { id: 'vw-n', nombre: 'Video Wall Norte', x1: 25000, y1: 15500, x2: 37000, y2: 15500, pantallas: 24 },
-    { id: 'vw-s', nombre: 'Video Wall Sur', x1: 25000, y1: 24500, x2: 37000, y2: 24500, pantallas: 24 },
-    { id: 'vw-o', nombre: 'Video Wall Oeste', x1: 25000, y1: 15500, x2: 25000, y2: 24500, pantallas: 21 },
-    { id: 'vw-e', nombre: 'Video Wall Este', x1: 37000, y1: 15500, x2: 37000, y2: 24500, pantallas: 21 },
+    { id: 'vw-n', nombre: 'Video Wall Norte', x1: 26000, y1: 13500, x2: 36000, y2: 13500, pantallas: 24 },
+    { id: 'vw-s', nombre: 'Video Wall Sur', x1: 26000, y1: 26500, x2: 36000, y2: 26500, pantallas: 24 },
+    { id: 'vw-o', nombre: 'Video Wall Oeste', x1: 24000, y1: 15500, x2: 24000, y2: 24500, pantallas: 21 },
+    { id: 'vw-e', nombre: 'Video Wall Este', x1: 38000, y1: 15500, x2: 38000, y2: 24500, pantallas: 21 },
   ],
-
   orientacion: [
     { texto: 'Bv. Macacha Güemes  ·  N', x: 31000, y: 2600 },
     { texto: 'Manuela Sáenz  ·  S', x: 31000, y: 37800 },

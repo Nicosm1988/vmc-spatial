@@ -1,41 +1,22 @@
-// Contorno de la planta (huella tipo LENTE/ALMENDRA, Torre Pelli, ~1.600 m²).
 import type { Point } from '../types'
-
-export interface LensOpts {
-  cx: number; cy: number; halfL: number; halfW: number
-  pointiness?: number; steps?: number
-}
-
-function widthAt(t: number, halfW: number, p: number): number {
-  return halfW * Math.pow(Math.max(0, 1 - t * t), p)
-}
-
+export interface LensOpts { cx: number; cy: number; halfL: number; halfW: number; pointiness?: number; steps?: number }
+function widthAt(t: number, halfW: number, p: number): number { return halfW * Math.pow(Math.max(0, 1 - t * t), p) }
 export function lensPlate(o: LensOpts): Point[] {
   const { cx, cy, halfL, halfW } = o
   const p = o.pointiness ?? 0.62
   const steps = o.steps ?? 64
   const pts: Point[] = []
-  for (let i = 0; i <= steps; i++) {
-    const t = -1 + (2 * i) / steps
-    pts.push({ x: Math.round(cx + t * halfL), y: Math.round(cy - widthAt(t, halfW, p)) })
-  }
-  for (let i = steps; i >= 0; i--) {
-    const t = -1 + (2 * i) / steps
-    pts.push({ x: Math.round(cx + t * halfL), y: Math.round(cy + widthAt(t, halfW, p)) })
-  }
+  for (let i = 0; i <= steps; i++) { const t = -1 + (2 * i) / steps; pts.push({ x: Math.round(cx + t * halfL), y: Math.round(cy - widthAt(t, halfW, p)) }) }
+  for (let i = steps; i >= 0; i--) { const t = -1 + (2 * i) / steps; pts.push({ x: Math.round(cx + t * halfL), y: Math.round(cy + widthAt(t, halfW, p)) }) }
   return pts
 }
-
 export function pointInPolygon(px: number, py: number, poly: Point[]): boolean {
   let inside = false
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y
-    const intersect = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi
-    if (intersect) inside = !inside
+    const it = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi
+    if (it) inside = !inside
   }
   return inside
 }
-
-export function toSvgPoints(poly: Point[]): string {
-  return poly.map((p) => `${p.x},${p.y}`).join(' ')
-}
+export function toSvgPoints(poly: Point[]): string { return poly.map((p) => `${p.x},${p.y}`).join(' ') }
