@@ -68,9 +68,9 @@ export function DeskBench({ pairs = 3, screen = '#0e2a52', night = false }: { pa
 // ---- PARED de pantallas (corregida) ----------------------------------------
 // count = cantidad EXACTA de pantallas. Se distribuyen en 2 filas (cols=count/2)
 // montadas en la banda SUPERIOR de un muro macizo que va de piso a techo.
-export function VideoWall({ x, z, len, rotY, night, count, screenColor = '#123a7a' }: { x: number; z: number; len: number; rotY: number; night: boolean; count: number; screenColor?: string }) {
+export function VideoWall({ x, z, len, rotY, night, count, filas, screenColor = '#123a7a' }: { x: number; z: number; len: number; rotY: number; night: boolean; count: number; filas?: number; screenColor?: string }) {
   const wallH = 3.1                 // muro de piso a techo
-  const rows = 2
+  const rows = filas ?? 2           // usa las filas de cada pared; si no hay, 2 por defecto
   const cols = Math.max(1, Math.ceil(count / rows))
   const gap = 0.035
   const sw = (len - 0.5) / cols - gap
