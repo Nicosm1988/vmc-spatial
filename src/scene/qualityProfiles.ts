@@ -1,0 +1,60 @@
+import type { QualityPreference, ResolvedQuality } from '../domain/experience'
+
+export interface QualityProfile {
+  dpr: number
+  shadows: boolean
+  shadowMapSize: 512 | 1024 | 2048
+  contactShadowResolution: 0 | 256 | 512 | 1024
+  postprocessing: boolean
+}
+
+export const QUALITY_PROFILES: Record<ResolvedQuality, QualityProfile> = {
+  performance: {
+    dpr: 1,
+    shadows: false,
+    shadowMapSize: 512,
+    contactShadowResolution: 0,
+    postprocessing: false,
+  },
+  balanced: {
+    dpr: 1.25,
+    shadows: true,
+    shadowMapSize: 1024,
+    contactShadowResolution: 512,
+    postprocessing: false,
+  },
+  cinematic: {
+    dpr: 1.75,
+    shadows: true,
+    shadowMapSize: 2048,
+    contactShadowResolution: 1024,
+    postprocessing: true,
+  },
+}
+
+interface DeviceHints {
+  hardwareConcurrency?: number
+  deviceMemory?: number
+  reducedMotion?: boolean
+}
+
+export function resolveQuality(
+  preference: QualityPreference,
+  hints: DeviceHints = {},
+): ResolvedQuality {
+  if (preference !== 'auto') return preference
+  if (hints.reducedMotion) return 'performance'
+
+  const cores = hints.hardwareConcurrency ?? 4
+  const memory = hints.deviceMemory ?? 4
+  return cores >= 6 && memory >= 6 ? 'balanced' : 'performance'
+}
+
+export function readDeviceHints(): DeviceHints {
+  const extendedNavigator = navigator as Navigator & { deviceMemory?: number }
+  return {
+    hardwareConcurrency: navigator.hardwareConcurrency,
+    deviceMemory: extendedNavigator.deviceMemory,
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  }
+}

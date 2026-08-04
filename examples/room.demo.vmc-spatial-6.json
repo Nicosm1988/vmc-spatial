@@ -1,0 +1,83 @@
+{
+  "schema": "vmc-spatial/6",
+  "nombre": "Sala de ejemplo · DEMO / NO VERIFICADA",
+  "piso": "Piso 16 · referencia demostrativa",
+  "ancho": 12000,
+  "alto": 8000,
+  "alturaLibre": 2900,
+  "plate": [
+    { "x": 0, "y": 0 },
+    { "x": 12000, "y": 0 },
+    { "x": 12000, "y": 8000 },
+    { "x": 0, "y": 8000 }
+  ],
+  "core": [
+    { "x": 4800, "y": 3000 },
+    { "x": 7200, "y": 3000 },
+    { "x": 7200, "y": 5000 },
+    { "x": 4800, "y": 5000 }
+  ],
+  "zonas": [
+    {
+      "id": "demo-core-001",
+      "nombre": "Núcleo demo",
+      "kind": "nucleo",
+      "cx": 6000,
+      "cy": 4000,
+      "color": "#0a1636",
+      "puestos": 0,
+      "ocupacion": 0,
+      "datalizacion": 0,
+      "nota": "Geometría y ubicación demostrativas; no representan infraestructura real."
+    },
+    {
+      "id": "demo-bench-001",
+      "nombre": "Isla de ejemplo",
+      "kind": "bench",
+      "cx": 3000,
+      "cy": 2300,
+      "rot": 0,
+      "pairs": 2,
+      "color": "#1f8fff",
+      "puestos": 4,
+      "ocupacion": 0,
+      "datalizacion": 0,
+      "nota": "Cantidad, posición y dimensiones no verificadas."
+    },
+    {
+      "id": "demo-table-001",
+      "nombre": "Mesa redonda de ejemplo",
+      "kind": "circular",
+      "cx": 9500,
+      "cy": 6000,
+      "r": 1400,
+      "color": "#2f6f7a",
+      "puestos": 0,
+      "ocupacion": 0,
+      "datalizacion": 0,
+      "nota": "Radio y ubicación demostrativos."
+    }
+  ],
+  "videoWalls": [
+    {
+      "id": "demo-videowall-001",
+      "nombre": "Videowall de ejemplo",
+      "x1": 1800,
+      "y1": 6500,
+      "x2": 5800,
+      "y2": 6500,
+      "pantallas": 10,
+      "filas": 2,
+      "flip": false
+    }
+  ],
+  "orientacion": [
+    {
+      "texto": "Norte demo · orientación no relevada",
+      "x": 6000,
+      "y": 500,
+      "rot": 0
+    }
+  ],
+  "actualizado": "2026-08-04T00:00:00.000Z"
+}
