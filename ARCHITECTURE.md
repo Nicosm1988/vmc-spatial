@@ -4,7 +4,7 @@
 
 VMC Spatial es hoy una SPA cliente construida con React + Vite. El árbol existente agrupa la composición en `src/App.tsx`, el render y los controles en `src/components/`, el preset en `src/data/` y utilidades de geometría/persistencia en `src/lib/`.
 
-La Fase 1 evolucionó esa base sin una migración masiva. La Fase 2 agrega un exterior procedural como vertical separado, con LOD, instancing y diagnóstico opt-in, sin cambiar el contrato importable de la sala. Toda geometría y dato espacial actual sigue clasificado como **DEMO / NO VERIFICADO**.
+La Fase 1 evolucionó esa base sin una migración masiva. La Fase 2 agregó un exterior procedural como vertical separado, con LOD, instancing y diagnóstico opt-in. La Fase 3 incorpora rutas de cámara tokenizadas, entrega cubierta entre escenas, un portal procedural y un LOD interior instanciado para presentación; además elimina los edificios circundantes del contrato y del renderer. Ninguna de estas fases cambia el contrato importable de la sala. Toda geometría y dato espacial actual sigue clasificado como **DEMO / NO VERIFICADO**.
 
 ## Flujo de ejecución actual
 
@@ -21,8 +21,13 @@ preset TS tipado ─────────────────────
 EXTERIOR_DEMO_SPEC ──> adaptador mm→m ──> exterior WebGL procedural
        │                                         │
        └─ status demo-unverified                 ├─> LOD de fachada
-                                                 ├─> contexto conceptual
-                                                 └─> diagnóstico opt-in
+                                                 ├─> sitio conceptual sin edificios vecinos
+                                                 └─> portal conceptual
+
+CINEMATIC_ACCESS_ROUTES ──> transición con token ──> adaptador de cámara
+       │                           │                         │
+       └─ status demo-unverified   ├─> stage estable         ├─> mm→m + curvas
+                                   └─> activeScene/handoff   └─> diagnóstico opt-in
 ```
 
 La validación de carga e importación ya forma parte de Fase 1. El preset está tipado, pero debe cruzar la validación de runtime antes de considerar cerrada la frontera; guardado/exportación reciben hoy el documento controlado por la aplicación y deben validar si en el futuro aceptan otra fuente.
@@ -30,6 +35,8 @@ La validación de carga e importación ya forma parte de Fase 1. El preset está
 Existe un único `VmcDocument` canónico. Selección, modo, cámara, calidad y otros controles de interfaz son estado efímero y no deben mezclarse con el documento exportable.
 
 `EXTERIOR_DEMO_SPEC` es otro contrato de dominio, deliberadamente separado. Describe massing, jardín, contexto conceptual, anclas DEMO y umbrales de LOD en milímetros enteros. No se serializa dentro de `VmcDocument`, no participa de import/export y no modifica la interpretación de `schema: "vmc-spatial/6"`. Sus parámetros públicos siguen siendo hipótesis visuales, no hechos físicos confirmados.
+
+`CINEMATIC_ACCESS_ROUTES` mantiene la misma separación. Declara rutas dirigidas DEMO entre etapas estables, con IDs, waypoints, posiciones y objetivos de mirada en milímetros enteros. Cada ejecución recibe un token efímero; las callbacks sólo pueden mutar la transición que conserva ese ID. El dominio no conoce Three.js ni curvas: `scene/cameraPath.ts` convierte a metros y calcula la interpolación dentro de un único marco de escena.
 
 ## Decisiones estructurales
 
@@ -138,6 +145,7 @@ No es un mandato para mover archivos sin beneficio. La regla es que todo código
 - objeto seleccionado;
 - modo explorar/editar y vista 2D/3D;
 - pose y transición de cámara;
+- token, fase y progreso del recorrido, y árbol WebGL activo durante el handoff;
 - calidad resuelta automáticamente, techo y estado del postprocesado;
 - drag activo, hover, mensajes y progreso de carga.
 
@@ -145,7 +153,11 @@ Las actualizaciones de dominio deben expresarse como operaciones deterministas. 
 
 ## Cámara y navegación
 
-La API de navegación debe exponer intenciones (`exterior`, `piso16`, `interior`, `cenital`, `reset`) en lugar de coordenadas desde la UI. La capa de cámara resuelve poses y transiciones, cancela una transición anterior al iniciar otra y respeta `prefers-reduced-motion`.
+La API de navegación expone intenciones (`exterior`, `piso16`, `interior`, `cenital`, `reset`) en lugar de coordenadas desde la UI. La capa de cámara resuelve poses y transiciones, invalida una transición anterior al iniciar otra y respeta `prefers-reduced-motion`.
+
+`stage` representa el último destino estable completado. `activeScene` representa el árbol WebGL montado y puede cambiar de `exterior` a `interior` durante el handoff, antes de confirmar el nuevo `stage`. La secuencia `flight → cover → handoff → reveal` cubre esa entrega con una capa DOM: no se interpola entre los sistemas de coordenadas exterior e interior.
+
+Las rutas y sus waypoints viven en `domain/cinematicAccess.ts`, clasificados `demo-unverified` y expresados en milímetros enteros. La conversión a metros y las curvas Catmull-Rom para posición/objetivo viven sólo en `scene/cameraPath.ts`. `CameraDirector` conserva la transición activa en refs durante cada frame y publica al store únicamente cambios discretos de fase/progreso.
 
 Las tres experiencias objetivo son:
 
@@ -153,7 +165,9 @@ Las tres experiencias objetivo son:
 2. vuelo libre exterior → piso 16;
 3. navegación interior en primera persona.
 
-La Fase 1 ofrece cámara orbital, transición guiada exterior → piso 16 → interior y atajos cenital/reset. La Fase 2 conserva ese recorrido sobre el nuevo exterior procedural y marca toda captura PNG con `DEMO · NO VERIFICADO`. Vuelo libre, primera persona y colisiones siguen pendientes; no deben documentarse como terminados.
+La Fase 1 ofrece cámara orbital y atajos cenital/reset. La Fase 2 monta el recorrido sobre el exterior procedural y marca toda captura PNG con `DEMO · NO VERIFICADO`. La Fase 3 entrega la aproximación cinematográfica al piso 16, el handoff cubierto hacia el interior, cancelación token-safe y un fallback directo de movimiento reducido. Vuelo libre, primera persona y colisiones siguen pendientes; no deben documentarse como terminados.
+
+El acceso visible en fachada es un marcador procedural conceptual parametrizado por `EXTERIOR_DEMO_SPEC`. No confirma la existencia, posición, forma ni transitabilidad de una ventana o abertura real.
 
 ## Iluminación y calidad
 
@@ -169,14 +183,17 @@ Presupuestos deseados para la escena base:
 
 Son objetivos de aceptación. Solo se puede declarar cumplimiento después de registrar dispositivo, navegador, resolución, preset, escena y medición.
 
-### LOD, instancing y diagnóstico exterior
+### LOD, instancing y diagnóstico
 
 - La calidad resuelta fija un techo de detalle exterior: rendimiento usa detalle medio; equilibrada y cinematográfica habilitan detalle cercano.
 - La fachada usa niveles cercano, medio y lejano; al aumentar la distancia reduce bandas y líneas hasta conservar sólo el massing.
-- La densidad del contexto conceptual también se reduce por nivel de detalle.
-- Vegetación, paños del jardín, bloques de contexto y columnas repetidas usan `InstancedMesh` y geometrías compartidas.
+- Los edificios circundantes se eliminaron tanto de `EXTERIOR_DEMO_SPEC` como de `UrbanContext`; no existe un nivel de detalle que vuelva a montarlos.
+- Permanecen suelo/plaza, paseo, vegetación, calle, agua y pérgola conceptuales. Vegetación, paños del jardín, marcos del portal y columnas repetidas usan `InstancedMesh` y geometrías compartidas cuando corresponde.
 - `?diagnostics=1` monta el colector de métricas y expone `window.__VMC_SCENE_METRICS__` con draw calls, triángulos, líneas, puntos, geometrías, texturas, programas, DPR, viewport, etapa y calidad.
-- El colector es opt-in, se desmonta de forma limpia y no convierte los presupuestos objetivo en afirmaciones de cumplimiento.
+- El mismo opt-in habilita `window.__VMC_CAMERA_DIAGNOSTICS__` con token/ruta, fase, progreso, `stage`, `activeScene`, movimiento reducido, pose, objetivo y FOV.
+- Los colectores se desmontan de forma limpia y no convierten los presupuestos objetivo en afirmaciones de cumplimiento.
+- En presentación, el interior deriva 13 batches instanciados del mismo `VmcDocument`; edición 3D monta condicionalmente el renderer detallado, nunca ambos a la vez.
+- La medición de Fase 3 aplica a escenas estables de presentación. El renderer detallado de edición conserva un presupuesto y perfil de optimización separados.
 
 ## Paredes, aberturas y repetición
 
@@ -196,18 +213,18 @@ Son objetivos de aceptación. Solo se puede declarar cumplimiento después de re
 
 ## Pruebas por límite
 
-- `domain`: schema de sala, contrato exterior separado, invariantes, conversión de unidades, geometría pura y migraciones.
+- `domain`: schema de sala, contratos exterior/cinematográfico separados, IDs, milímetros enteros, handoff, invariantes, geometría pura y migraciones.
 - `persistence`: localStorage corrupto/ausente, límite de archivo, import/export round-trip.
 - `editor`: comandos, snap, IDs, duplicado, borrado y futuro undo/redo.
-- `scene`: geometría procedural exterior, LOD, smoke tests, creación/destrucción, selección y fallback; perfiles de rendimiento fuera de unit tests.
-- `ui`: teclado, nombres accesibles, foco, reduced motion y estados de carga/error.
-- E2E: carga, cambio 2D/3D, entrada a sala, edición, persistencia, reset e import/export.
+- `scene`: geometría procedural exterior, ausencia de edificios circundantes, adaptación mm→m, curvas finitas por marco, LOD, creación/destrucción, selección y fallback; perfiles de rendimiento fuera de unit tests.
+- `ui`: teclado, nombres accesibles, foco, progreso/anuncios de transición, cancelación, reduced motion y estados de carga/error.
+- E2E: carga, cambio 2D/3D, recorrido cinematográfico real, handoff, cancelación sin callback tardía, movimiento reducido, métricas opt-in, edición, persistencia, reset e import/export.
 
 ## Roadmap de arquitectura
 
 - **Fase 1:** renderer WebGL, cámara, iluminación, navegación mínima, validación y herramientas de calidad.
-- **Fase 2 (actual):** exterior procedural estilizado, contrato separado, referencias públicas documentadas, LOD, instancing, diagnóstico y capturas marcadas; continúa DEMO.
-- **Fase 3:** transición cinematográfica hacia piso 16 con fallback de movimiento reducido.
+- **Fase 2 (entregada):** exterior procedural estilizado, contrato separado, referencias públicas documentadas, LOD, instancing, diagnóstico y capturas marcadas; continúa DEMO.
+- **Fase 3 (actual):** rutas cinematográficas DEMO tokenizadas, acceso procedural, handoff cubierto, UI accesible, cancelación segura, fallback de movimiento reducido y exterior sin edificios circundantes.
 - **Fase 4:** catálogo paramétrico, edición avanzada, objetos versionados e instancing.
 - **Fase 5:** Dexie/IndexedDB, migraciones, undo/redo, import/export ampliado y plano 2D consolidado.
 - **Fase 6:** presupuestos medidos, accesibilidad, pruebas, auditoría de assets, hardening y deploy.

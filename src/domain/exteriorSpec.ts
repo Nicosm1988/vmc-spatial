@@ -40,7 +40,7 @@ export interface ExteriorGardenSpec {
 
 export interface ExteriorSiteElementSpec {
   readonly id: string
-  readonly kind: 'ground' | 'green-ring' | 'promenade' | 'street' | 'water' | 'context-block'
+  readonly kind: 'ground' | 'green-ring' | 'promenade' | 'street' | 'water'
   readonly centerMm: Point2Mm
   readonly elevationMm: number
   readonly sizeMm: Size3Mm
@@ -60,6 +60,14 @@ export interface ExteriorLodSpec {
   readonly midMaxDistanceMm: number
 }
 
+export interface ExteriorAccessPortalSpec {
+  readonly id: string
+  readonly classification: 'conceptual'
+  readonly sizeMm: Size3Mm
+  readonly frameThicknessMm: number
+  readonly rotationRad: number
+}
+
 export interface ExteriorDemoSpec {
   readonly id: string
   readonly status: 'demo-unverified'
@@ -69,6 +77,7 @@ export interface ExteriorDemoSpec {
   readonly floorCount: number
   readonly floor16ElevationMm: number
   readonly demoEntryAnchorMm: Point3Mm
+  readonly demoEntryPortal: ExteriorAccessPortalSpec
   readonly massing: readonly ExteriorMassingSpec[]
   readonly garden: ExteriorGardenSpec
   readonly site: ExteriorSiteSpec
@@ -92,6 +101,13 @@ export const EXTERIOR_DEMO_SPEC: ExteriorDemoSpec = deepFreeze({
   floorCount: 36,
   floor16ElevationMm: 0,
   demoEntryAnchorMm: { x: -36_000, y: 36_000, elevation: 1_400 },
+  demoEntryPortal: {
+    id: 'demo-unverified-floor16-access-portal',
+    classification: 'conceptual',
+    sizeMm: { width: 4_200, depth: 160, height: 2_800 },
+    frameThicknessMm: 140,
+    rotationRad: -Math.PI / 4,
+  },
   massing: [
     {
       id: 'city-square',
@@ -202,14 +218,6 @@ export const EXTERIOR_DEMO_SPEC: ExteriorDemoSpec = deepFreeze({
         sizeMm: { width: 60_000, depth: 380_000, height: 80 },
         rotationRad: 0,
       },
-      {
-        id: 'conceptual-context-block',
-        kind: 'context-block',
-        centerMm: { x: -135_000, y: -70_000 },
-        elevationMm: -60_000,
-        sizeMm: { width: 22_000, depth: 28_000, height: 108_000 },
-        rotationRad: 0,
-      },
     ],
   },
   lod: {
@@ -269,6 +277,24 @@ export function validateExteriorSpec(spec: ExteriorDemoSpec): string[] {
   }
   addIntegerMmError(errors, spec.floor16ElevationMm, 'floor16ElevationMm')
   validatePoint3(errors, spec.demoEntryAnchorMm, 'demoEntryAnchorMm')
+  registerId(spec.demoEntryPortal.id, 'demoEntryPortal.id')
+  if (spec.demoEntryPortal.classification !== 'conceptual') {
+    errors.push('demoEntryPortal.classification must be conceptual')
+  }
+  validateSize(errors, spec.demoEntryPortal.sizeMm, 'demoEntryPortal.sizeMm')
+  addIntegerMmError(
+    errors,
+    spec.demoEntryPortal.frameThicknessMm,
+    'demoEntryPortal.frameThicknessMm',
+    true,
+  )
+  if (
+    spec.demoEntryPortal.frameThicknessMm * 2 >=
+    Math.min(spec.demoEntryPortal.sizeMm.width, spec.demoEntryPortal.sizeMm.height)
+  ) {
+    errors.push('demoEntryPortal.frameThicknessMm must leave a positive inner opening')
+  }
+  validateRotation(errors, spec.demoEntryPortal.rotationRad, 'demoEntryPortal.rotationRad')
 
   if (spec.massing.length !== 2) errors.push('massing must contain exactly two volumes')
   const massingKinds = new Set<ExteriorMassingSpec['kind']>()

@@ -7,11 +7,12 @@ Prototipo web 2D/3D para explorar un exterior procedural y editar una representa
 ## Qué incluye la base actual
 
 - Vista 3D WebGL del exterior y del piso, con cámara orbital, iluminación y postprocesado opcional.
-- Exterior procedural de Fase 2 con dos volúmenes abstractos, jardín alto, contexto urbano conceptual y detalle escalonado por calidad/distancia.
-- Recorrido guiado exterior → piso 16 → interior, con movimiento reducido cuando el navegador lo solicita.
+- Exterior procedural con dos volúmenes abstractos, jardín alto y un sitio conceptual sin edificios circundantes; permanecen suelo/plaza, vegetación, paseo, calle, agua y pérgola.
+- Recorrido cinematográfico tokenizado exterior → piso 16 → interior, con cancelación segura y fallback cuando el navegador solicita movimiento reducido.
+- Interior de presentación procedural e instanciado; el modo de edición mantiene el renderer detallado y sus herramientas.
 - Accesos de cámara para entrar a la sala, vista cenital, reinicio y captura PNG local marcada `DEMO · NO VERIFICADO`.
 - Perfiles de calidad automático, rendimiento, equilibrado y cinematográfico.
-- Instancing para vegetación, paños del jardín, bloques de contexto y otros elementos repetidos del exterior.
+- Instancing para vegetación, paños del jardín, columnas del exterior y otros elementos repetidos.
 - Plano 2D y escena 3D derivados del mismo documento `vmc-spatial/6`.
 - Selección, alta, movimiento, rotación, duplicado y borrado de zonas y videowalls.
 - Edición de capacidad de islas, tamaño de objetos y composición de pantallas.
@@ -67,7 +68,9 @@ npm run format
 
 `npm run build` genera `dist/`. `npm run check` ya incluye typecheck, lint, tests y build. Para cambios de interacción o navegación se debe ejecutar también `npm run test:e2e`.
 
-El diagnóstico de render se habilita de forma explícita con `?diagnostics=1`. Mientras está activo, publica el último snapshot de draw calls, triángulos, memoria, DPR, viewport, etapa y calidad en `window.__VMC_SCENE_METRICS__`. Es una herramienta de medición; su existencia no demuestra por sí sola que se cumplan los presupuestos.
+El diagnóstico se habilita de forma explícita con `?diagnostics=1`. Mientras está activo, publica el último snapshot de draw calls, triángulos, memoria, DPR, viewport, etapa y calidad en `window.__VMC_SCENE_METRICS__`, y el estado efímero de la ruta/cámara en `window.__VMC_CAMERA_DIAGNOSTICS__`. Es una herramienta de medición; su existencia no demuestra por sí sola que se cumplan los presupuestos.
+
+La medición reproducible de Fase 3 para las escenas estables de presentación está registrada en [`docs/PHASE_3_CINEMATIC_ACCESS.md`](./docs/PHASE_3_CINEMATIC_ACCESS.md). Sus resultados no se extrapolan al renderer detallado de edición, otros perfiles, otros dispositivos ni FPS.
 
 ## Despliegue en Vercel
 
@@ -100,7 +103,7 @@ Después del despliegue se debe comprobar: carga directa, refresh de la ruta, es
 - Las posiciones usan el plano de dominio `x/y`; el renderer las proyecta al plano Three.js `x/z` y reserva `y` para altura.
 - El ejemplo importable está en [`examples/room.demo.vmc-spatial-6.json`](./examples/room.demo.vmc-spatial-6.json).
 
-El exterior no forma parte del documento importable. Su contrato DEMO vive separado en `src/domain/exteriorSpec.ts`, no cambia ni amplía silenciosamente `vmc-spatial/6` y no se guarda en las exportaciones de sala. Sus medidas y relaciones son parámetros técnicos no validados físicamente.
+El exterior no forma parte del documento importable. Su contrato DEMO vive separado en `src/domain/exteriorSpec.ts`, no cambia ni amplía silenciosamente `vmc-spatial/6` y no se guarda en las exportaciones de sala. Las rutas de cámara viven también en un contrato DEMO separado, `src/domain/cinematicAccess.ts`: posiciones y objetivos se guardan en milímetros enteros y las curvas se calculan únicamente en el adaptador de escena. Sus medidas y relaciones son parámetros técnicos no validados físicamente.
 
 La forma, orientación, escala y contenido de la escena demo no deben reutilizarse como evidencia del espacio real. Ver [`DATA_MODEL.md`](./DATA_MODEL.md) y el [registro de supuestos y hechos](./docs/ASSUMPTIONS_AND_FACTS.md).
 
@@ -114,6 +117,7 @@ La forma, orientación, escala y contenido de la escena demo no deben reutilizar
 - [`docs/ASSUMPTIONS_AND_FACTS.md`](./docs/ASSUMPTIONS_AND_FACTS.md): hechos confirmados, supuestos y pendientes.
 - [`docs/PHASE_0_AUDIT_AND_PHASE_1.md`](./docs/PHASE_0_AUDIT_AND_PHASE_1.md): diagnóstico, árbol propuesto y plan de Fase 1.
 - [`docs/PHASE_2_EXTERIOR.md`](./docs/PHASE_2_EXTERIOR.md): matriz de fuentes públicas, restricciones e incertidumbres del exterior procedural.
+- [`docs/PHASE_3_CINEMATIC_ACCESS.md`](./docs/PHASE_3_CINEMATIC_ACCESS.md): rutas DEMO, handoff entre escenas, accesibilidad, pruebas y método de medición.
 
 ## Principios del proyecto
 

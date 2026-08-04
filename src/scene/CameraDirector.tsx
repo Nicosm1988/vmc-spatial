@@ -1,11 +1,22 @@
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import type { SceneStage } from '../domain/experience'
-import { EXTERIOR_DEMO_SPEC } from '../domain/exteriorSpec'
-import { mmToMeters } from '../domain/units'
+import {
+  getCinematicRoute,
+  type CinematicRouteSpec,
+  type CinematicTransitionPhase,
+} from '../domain/cinematicAccess'
+import type { ActiveScene, StableSceneStage } from '../domain/experience'
 import { useExperienceStore } from '../state/useExperienceStore'
 import type { CamApiRef, OrbitControlsHandle } from './cameraTypes'
+import {
+  clampCameraFrameDeltaMs,
+  resolveCameraRoute,
+  resolveCameraWaypoint,
+  sampleCameraRoute,
+  type CameraPathPose,
+  type ResolvedCameraWaypoint,
+} from './cameraPath'
 
 interface CameraDirectorProps {
   center: [number, number, number]
@@ -13,106 +24,201 @@ interface CameraDirectorProps {
   camApiRef: CamApiRef
 }
 
-interface CameraPreset {
-  position: THREE.Vector3
-  target: THREE.Vector3
-  duration: number
-}
-
 interface ActiveTransition {
-  stage: SceneStage
-  startedAt: number
-  duration: number
-  fromPosition: THREE.Vector3
-  fromTarget: THREE.Vector3
-  toPosition: THREE.Vector3
-  toTarget: THREE.Vector3
+  readonly id: number
+  readonly route: CinematicRouteSpec
+  readonly waypoints: readonly ResolvedCameraWaypoint[]
+  elapsedMs: number
+  publishElapsedMs: number
+  coverHoldMs: number
+  handoffHoldMs: number
+  handedOff: boolean
 }
 
-function easeInOutCubic(value: number) {
-  return value < 0.5 ? 4 * value ** 3 : 1 - (-2 * value + 2) ** 3 / 2
+export interface CameraDiagnosticsSnapshot {
+  readonly transitionId: number | null
+  readonly routeId: string | null
+  readonly phase: CinematicTransitionPhase | 'idle'
+  readonly progress: number
+  readonly activeScene: ActiveScene
+  readonly stage: StableSceneStage
+  readonly reducedMotion: boolean
+  readonly position: readonly [number, number, number]
+  readonly target: readonly [number, number, number]
+  readonly fovDeg: number
+  readonly timestamp: number
 }
 
-function makePreset(stage: SceneStage, cx: number, cz: number): CameraPreset {
-  const exteriorHeight = mmToMeters(EXTERIOR_DEMO_SPEC.heightMm)
-  switch (stage) {
-    case 'approach16':
-    case 'floor16': {
-      const anchorX = cx + mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.x)
-      const anchorZ = cz + mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.y)
-      return {
-        position: new THREE.Vector3(
-          anchorX - exteriorHeight * 0.48,
-          exteriorHeight * 0.075,
-          anchorZ + exteriorHeight * 0.66,
-        ),
-        target: new THREE.Vector3(
-          anchorX,
-          mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.elevation),
-          anchorZ,
-        ),
-        duration: 2.8,
-      }
+interface CameraDiagnosticsWindow extends Window {
+  __VMC_CAMERA_DIAGNOSTICS__?: CameraDiagnosticsSnapshot
+}
+
+const COVER_HOLD_MS = 420
+const HANDOFF_HOLD_MS = 140
+const PROGRESS_PUBLISH_INTERVAL_MS = 80
+
+function getStableWaypoint(stage: StableSceneStage) {
+  if (stage === 'exterior') return getCinematicRoute('exterior', 'floor16')?.waypoints[0]
+  if (stage === 'floor16') return getCinematicRoute('exterior', 'floor16')?.waypoints.at(-1)
+  return getCinematicRoute('exterior', 'interior')?.waypoints.at(-1)
+}
+
+function stablePose(
+  stage: StableSceneStage,
+  center: readonly [number, number, number],
+): CameraPathPose {
+  const waypoint = getStableWaypoint(stage)
+  if (!waypoint) {
+    return {
+      position: new THREE.Vector3(center[0] - 150.4, 78.4, center[2] + 220),
+      lookAt: new THREE.Vector3(center[0], 17, center[2]),
+      fovDeg: 45,
     }
-    case 'interior':
-      return {
-        position: new THREE.Vector3(cx - 5.5, 2.35, cz + 8.5),
-        target: new THREE.Vector3(cx + 5.5, 1.3, cz),
-        duration: 1.55,
-      }
-    case 'exterior':
-    default:
-      return {
-        position: new THREE.Vector3(
-          cx - exteriorHeight * 0.94,
-          exteriorHeight * 0.49,
-          cz + exteriorHeight * 1.375,
-        ),
-        target: new THREE.Vector3(cx, exteriorHeight * 0.10625, cz),
-        duration: 2.25,
-      }
   }
+  return resolveCameraWaypoint(waypoint, center)
+}
+
+function getCameraFov(camera: THREE.Camera) {
+  return camera instanceof THREE.PerspectiveCamera ? camera.fov : 45
+}
+
+function applyPose(camera: THREE.Camera, controls: OrbitControlsHandle, pose: CameraPathPose) {
+  camera.position.copy(pose.position)
+  controls.target.copy(pose.lookAt)
+  if (camera instanceof THREE.PerspectiveCamera && camera.fov !== pose.fovDeg) {
+    camera.fov = pose.fovDeg
+    camera.updateProjectionMatrix()
+  }
+  controls.update()
+}
+
+function coverProgress(route: CinematicRouteSpec) {
+  return (
+    route.waypoints.find((waypoint) => waypoint.phase === 'cover')?.progress ??
+    route.handoffProgress
+  )
+}
+
+function phaseAtProgress(route: CinematicRouteSpec, progress: number): CinematicTransitionPhase {
+  const coverAt = coverProgress(route)
+  if (progress < coverAt) return 'flight'
+  if (progress < route.handoffProgress) return 'cover'
+  if (progress === route.handoffProgress) return 'handoff'
+  return 'reveal'
+}
+
+function finalPose(
+  route: CinematicRouteSpec,
+  center: readonly [number, number, number],
+): CameraPathPose | null {
+  const waypoint = route.waypoints.at(-1)
+  return waypoint ? resolveCameraWaypoint(waypoint, center) : null
 }
 
 export default function CameraDirector({ center, controlsRef, camApiRef }: CameraDirectorProps) {
   const { camera, gl } = useThree()
   const stage = useExperienceStore((state) => state.stage)
-  const settleAtFloor16 = useExperienceStore((state) => state.settleAtFloor16)
+  const transitionId = useExperienceStore((state) => state.transition?.id ?? null)
+  const reducedMotion = useExperienceStore((state) => state.reducedMotion)
+  const setTransitionPhase = useExperienceStore((state) => state.setTransitionPhase)
+  const setTransitionProgress = useExperienceStore((state) => state.setTransitionProgress)
+  const handoffTransition = useExperienceStore((state) => state.handoffTransition)
+  const completeTransition = useExperienceStore((state) => state.completeTransition)
+  const cancelTransition = useExperienceStore((state) => state.cancelTransition)
   const enterInterior = useExperienceStore((state) => state.enterInterior)
-  const finishTransition = useExperienceStore((state) => state.finishTransition)
   const active = useRef<ActiveTransition | null>(null)
-  const initialized = useRef(false)
+  const diagnosticsEnabled = useRef(
+    new URLSearchParams(window.location.search).get('diagnostics') === '1',
+  )
+
+  function publishDiagnostics(
+    phase: CinematicTransitionPhase | 'idle',
+    progress: number,
+    route: CinematicRouteSpec | null,
+  ) {
+    if (!diagnosticsEnabled.current) return
+    const controls = controlsRef.current
+    if (!controls) return
+    const state = useExperienceStore.getState()
+    const diagnosticsWindow = window as CameraDiagnosticsWindow
+    diagnosticsWindow.__VMC_CAMERA_DIAGNOSTICS__ = {
+      transitionId: state.transition?.id ?? null,
+      routeId: route?.id ?? null,
+      phase,
+      progress,
+      activeScene: state.activeScene,
+      stage: state.stage,
+      reducedMotion: state.reducedMotion,
+      position: camera.position.toArray(),
+      target: controls.target.toArray(),
+      fovDeg: getCameraFov(camera),
+      timestamp: performance.now(),
+    }
+  }
 
   useEffect(() => {
     const controls = controlsRef.current
     if (!controls) return
 
-    const preset = makePreset(stage, center[0], center[2])
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-    if (!initialized.current || reducedMotion || stage === 'floor16') {
-      camera.position.copy(preset.position)
-      controls.target.copy(preset.target)
-      controls.enabled = true
-      controls.update()
-      initialized.current = true
+    const transition = useExperienceStore.getState().transition
+    if (!transition || transition.id !== transitionId) {
       active.current = null
-      if (stage === 'approach16') settleAtFloor16()
-      else finishTransition()
+      controls.enabled = true
+      applyPose(camera, controls, stablePose(stage, center))
+      publishDiagnostics('idle', 1, null)
       return
     }
 
-    controls.enabled = false
-    active.current = {
-      stage,
-      startedAt: performance.now(),
-      duration: preset.duration,
-      fromPosition: camera.position.clone(),
-      fromTarget: controls.target.clone(),
-      toPosition: preset.position,
-      toTarget: preset.target,
+    const route = getCinematicRoute(transition.from, transition.to)
+    if (!route || route.id !== transition.routeId) {
+      cancelTransition()
+      controls.enabled = true
+      return
     }
-  }, [camera, center, controlsRef, finishTransition, settleAtFloor16, stage])
+
+    if (reducedMotion) {
+      const destination = finalPose(route, center)
+      if (destination) applyPose(camera, controls, destination)
+      controls.enabled = true
+      completeTransition(transition.id)
+      publishDiagnostics('idle', 1, route)
+      return
+    }
+
+    const currentPose: CameraPathPose = {
+      position: camera.position.clone(),
+      lookAt: controls.target.clone(),
+      fovDeg: getCameraFov(camera),
+    }
+    active.current = {
+      id: transition.id,
+      route,
+      waypoints: resolveCameraRoute(route, center, currentPose),
+      elapsedMs: transition.progress * route.durationMs,
+      publishElapsedMs: PROGRESS_PUBLISH_INTERVAL_MS,
+      coverHoldMs: 0,
+      handoffHoldMs: 0,
+      handedOff: transition.handedOff,
+    }
+    controls.enabled = false
+    publishDiagnostics(transition.phase, transition.progress, route)
+
+    return () => {
+      controls.enabled = true
+    }
+    // publishDiagnostics intentionally stays outside dependencies: it writes
+    // opt-in diagnostics only and reads current refs/store state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    camera,
+    cancelTransition,
+    center,
+    completeTransition,
+    controlsRef,
+    reducedMotion,
+    stage,
+    transitionId,
+  ])
 
   useEffect(() => {
     const controls = controlsRef.current
@@ -145,12 +251,7 @@ export default function CameraDirector({ center, controlsRef, camApiRef }: Camer
         camera.position.copy(target()).add(offset)
         controls.update()
       },
-      reset: () => {
-        const preset = makePreset(stage, center[0], center[2])
-        camera.position.copy(preset.position)
-        controls.target.copy(preset.target)
-        controls.update()
-      },
+      reset: () => applyPose(camera, controls, stablePose(stage, center)),
       top: () => {
         controls.target.set(center[0], 0, center[2])
         camera.position.set(center[0], 105, center[2] + 0.01)
@@ -186,23 +287,105 @@ export default function CameraDirector({ center, controlsRef, camApiRef }: Camer
     }
   }, [camApiRef, camera, center, controlsRef, enterInterior, gl, stage])
 
-  useFrame(() => {
+  useEffect(
+    () => () => {
+      const controls = controlsRef.current
+      if (controls) controls.enabled = true
+      active.current = null
+      if (diagnosticsEnabled.current) {
+        delete (window as CameraDiagnosticsWindow).__VMC_CAMERA_DIAGNOSTICS__
+      }
+    },
+    [controlsRef],
+  )
+
+  useFrame((_, delta) => {
     const transition = active.current
     const controls = controlsRef.current
     if (!transition || !controls) return
 
-    const elapsed = (performance.now() - transition.startedAt) / 1000
-    const progress = Math.min(1, elapsed / transition.duration)
-    const eased = easeInOutCubic(progress)
-    camera.position.lerpVectors(transition.fromPosition, transition.toPosition, eased)
-    controls.target.lerpVectors(transition.fromTarget, transition.toTarget, eased)
-    controls.update()
+    const liveState = useExperienceStore.getState()
+    const liveTransition = liveState.transition
+    if (!liveTransition || liveTransition.id !== transition.id) {
+      active.current = null
+      controls.enabled = true
+      return
+    }
+
+    if (liveState.reducedMotion) {
+      const destination = finalPose(transition.route, center)
+      if (destination) applyPose(camera, controls, destination)
+      controls.enabled = true
+      active.current = null
+      completeTransition(transition.id)
+      publishDiagnostics('idle', 1, transition.route)
+      return
+    }
+
+    // Cap long background-tab resumes without turning low-FPS devices into
+    // slow motion. A 500 ms ceiling keeps the route progressing on software
+    // WebGL while still preventing a multi-second suspension from skipping it.
+    const deltaMs = clampCameraFrameDeltaMs(delta)
+    transition.elapsedMs += deltaMs
+    transition.publishElapsedMs += deltaMs
+
+    const changesRenderScene = transition.route.fromActiveScene !== transition.route.toActiveScene
+    const coverAt = coverProgress(transition.route)
+    let progress = Math.min(1, transition.elapsedMs / transition.route.durationMs)
+    let phase = phaseAtProgress(transition.route, progress)
+
+    if (changesRenderScene && !transition.handedOff && progress >= coverAt) {
+      transition.coverHoldMs += deltaMs
+      progress = coverAt
+      transition.elapsedMs = coverAt * transition.route.durationMs
+      phase = 'cover'
+
+      if (transition.coverHoldMs >= COVER_HOLD_MS) {
+        progress = transition.route.handoffProgress
+        transition.elapsedMs = transition.route.handoffProgress * transition.route.durationMs
+        phase = 'handoff'
+        transition.handedOff = handoffTransition(transition.id)
+      }
+    } else if (!transition.handedOff && progress >= transition.route.handoffProgress) {
+      phase = 'handoff'
+      transition.handedOff = handoffTransition(transition.id)
+    }
+
+    if (changesRenderScene && transition.handedOff) {
+      if (transition.handoffHoldMs < HANDOFF_HOLD_MS) {
+        transition.handoffHoldMs += deltaMs
+        progress = transition.route.handoffProgress
+        transition.elapsedMs = transition.route.handoffProgress * transition.route.durationMs
+        phase = 'handoff'
+      } else {
+        phase = 'reveal'
+      }
+    }
+
+    const scene = transition.handedOff
+      ? transition.route.toActiveScene
+      : transition.route.fromActiveScene
+    const pose = sampleCameraRoute(transition.waypoints, scene, progress)
+    if (pose) applyPose(camera, controls, pose)
+
+    if (liveTransition.phase !== phase) setTransitionPhase(transition.id, phase)
+    if (
+      transition.publishElapsedMs >= PROGRESS_PUBLISH_INTERVAL_MS ||
+      progress >= 1 ||
+      progress === transition.route.handoffProgress
+    ) {
+      transition.publishElapsedMs = 0
+      setTransitionProgress(transition.id, progress)
+      publishDiagnostics(phase, progress, transition.route)
+    }
 
     if (progress < 1) return
     controls.enabled = true
     active.current = null
-    if (transition.stage === 'approach16') settleAtFloor16()
-    else finishTransition()
+    setTransitionProgress(transition.id, 1)
+    setTransitionPhase(transition.id, 'reveal')
+    completeTransition(transition.id)
+    publishDiagnostics('idle', 1, transition.route)
   })
 
   return null
