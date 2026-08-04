@@ -1,0 +1,54 @@
+import type { AppMode, VmcDocument, Zone } from '../types'
+import { puestosDe, wallGeom } from '../lib/geometry'
+
+interface Props {
+  doc: VmcDocument; selectedId: string | null; mode: AppMode
+  onPatchZone: (id: string, patch: Partial<Zone>) => void
+  onPatchWall: (id: string, patch: { len?: number; ang?: number; pantallas?: number; filas?: number }) => void
+  onFlipWall: (id: string) => void
+}
+
+export default function Inspector({ doc, selectedId, mode, onPatchZone, onPatchWall, onFlipWall }: Props) {
+  const z = doc.zonas.find((x) => x.id === selectedId) || null
+  const wall = doc.videoWalls.find((w) => w.id === selectedId) || null
+  const editable = mode !== 'explorar'
+  const num = (v: string) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+
+  if (wall) {
+    const g = wallGeom(wall), dis = !editable
+    return (
+      <div>
+        <h3>Inspector · {wall.nombre}</h3>
+        {!editable && <div className="hint" style={{ marginBottom: 10 }}>Pasá a <b>Editar</b> para modificar.</div>}
+        <button className="wide" disabled={dis} onClick={() => onFlipWall(wall.id)}>🔃 Cambiar lado de las pantallas</button>
+        <div className="field" style={{ marginTop: 12 }}><label>📏 Largo de la pared (mm) · {Math.round(g.len)}</label><input className="slider" type="range" min={2000} max={18000} step={100} value={Math.round(g.len)} disabled={dis} onChange={(e) => onPatchWall(wall.id, { len: num(e.target.value) })} /></div>
+        <div className="row2">
+          <div className="field"><label>Largo exacto (mm)</label><input type="number" value={Math.round(g.len)} disabled={dis} onChange={(e) => onPatchWall(wall.id, { len: num(e.target.value) })} /></div>
+          <div className="field"><label>Rotación (°)</label><input type="number" value={Math.round((g.ang * 180) / Math.PI)} disabled={dis} onChange={(e) => onPatchWall(wall.id, { ang: (num(e.target.value) * Math.PI) / 180 })} /></div>
+        </div>
+        <div className="field"><label>Pantallas · {wall.pantallas}</label><input className="slider" type="range" min={2} max={60} value={wall.pantallas} disabled={dis} onChange={(e) => onPatchWall(wall.id, { pantallas: num(e.target.value) })} /></div>
+        <div className="field"><label>Filas · {wall.filas || 2}</label><input className="slider" type="range" min={1} max={5} value={wall.filas || 2} disabled={dis} onChange={(e) => onPatchWall(wall.id, { filas: num(e.target.value) })} /></div>
+        <div className="hint">📺 {wall.pantallas} pantallas · {Math.ceil(wall.pantallas / (wall.filas || 2))} col × {wall.filas || 2} filas · lado {wall.flip ? 'B' : 'A'}</div>
+      </div>
+    )
+  }
+
+  if (!z) return (<div><h3>Inspector</h3><div className="empty">Seleccioná un objeto o una pared. En <b>Editar</b> lo arrastrás (fluido), rotás y redimensionás.</div></div>)
+  const dis = !editable, isBench = z.kind === 'bench', isCirc = z.kind === 'circular', isRect = z.kind === 'comedor' || z.kind === 'oficina'
+  return (
+    <div>
+      <h3>Inspector · {z.nombre}</h3>
+      {!editable && <div className="hint" style={{ marginBottom: 10 }}>Pasá a <b>Editar</b> para modificar.</div>}
+      <div className="field"><label>Nombre</label><input type="text" value={z.nombre} disabled={dis} onChange={(e) => onPatchZone(z.id, { nombre: e.target.value })} /></div>
+      <div className="field"><label>Color</label><input type="color" value={z.color} disabled={dis} onChange={(e) => onPatchZone(z.id, { color: e.target.value })} /></div>
+      {isBench && (<div className="field"><label>Pares · {z.pairs}</label><input className="slider" type="range" min={1} max={8} value={z.pairs || 0} disabled={dis} onChange={(e) => onPatchZone(z.id, { pairs: num(e.target.value), puestos: num(e.target.value) * 2 })} /></div>)}
+      {isCirc && (<div className="field"><label>Radio (mm) · {z.r}</label><input className="slider" type="range" min={800} max={3200} step={50} value={z.r || 1650} disabled={dis} onChange={(e) => onPatchZone(z.id, { r: num(e.target.value) })} /></div>)}
+      {isRect && (<><div className="field"><label>Ancho (mm) · {z.w}</label><input className="slider" type="range" min={1500} max={9000} step={100} value={z.w || 3600} disabled={dis} onChange={(e) => onPatchZone(z.id, { w: num(e.target.value) })} /></div><div className="field"><label>Profundidad (mm) · {z.h}</label><input className="slider" type="range" min={1000} max={8000} step={100} value={z.h || 2600} disabled={dis} onChange={(e) => onPatchZone(z.id, { h: num(e.target.value) })} /></div></>)}
+      {(isBench || isRect) && (<div className="field"><label>Rotación (°) · {Math.round(((z.rot || 0) * 180) / Math.PI)}</label><input className="slider" type="range" min={0} max={360} value={Math.round(((z.rot || 0) * 180) / Math.PI)} disabled={dis} onChange={(e) => onPatchZone(z.id, { rot: (num(e.target.value) * Math.PI) / 180 })} /></div>)}
+      <div className="field"><label>Ocupación · {Math.round(z.ocupacion)} %</label><input className="slider" type="range" min={0} max={100} value={z.ocupacion} disabled={dis} onChange={(e) => onPatchZone(z.id, { ocupacion: num(e.target.value) })} /></div>
+      <div className="field"><label>% Datalización · {Math.round(z.datalizacion)} %</label><input className="slider" type="range" min={0} max={100} value={z.datalizacion} disabled={dis} onChange={(e) => onPatchZone(z.id, { datalizacion: num(e.target.value) })} /></div>
+      {editable && (<div className="row2"><div className="field"><label>X (mm)</label><input type="number" value={z.cx} onChange={(e) => onPatchZone(z.id, { cx: num(e.target.value) })} /></div><div className="field"><label>Y (mm)</label><input type="number" value={z.cy} onChange={(e) => onPatchZone(z.id, { cy: num(e.target.value) })} /></div></div>)}
+      <div className="hint">Tipo: <span className="badge">{z.kind}</span> · {puestosDe(z)} puestos</div>
+    </div>
+  )
+}
