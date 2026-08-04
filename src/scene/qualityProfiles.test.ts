@@ -43,5 +43,7 @@ describe('quality profile resolution', () => {
     expect(QUALITY_PROFILES.balanced.postprocessing).toBe(false)
     expect(QUALITY_PROFILES.cinematic.postprocessing).toBe(true)
     expect(QUALITY_PROFILES.performance.dpr).toBeLessThan(QUALITY_PROFILES.cinematic.dpr)
+    expect(QUALITY_PROFILES.performance.exteriorDetail).toBe('mid')
+    expect(QUALITY_PROFILES.balanced.exteriorDetail).toBe('near')
   })
 })

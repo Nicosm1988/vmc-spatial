@@ -1,15 +1,17 @@
 # VMC Spatial Studio
 
-Prototipo web 2D/3D para explorar y editar una representación espacial de una sala identificada en la experiencia como “VMC · Piso 16”. Está construido con React, TypeScript, Vite, Three.js, React Three Fiber y Drei.
+Prototipo web 2D/3D para explorar un exterior procedural y editar una representación espacial de una sala identificada en la experiencia como “VMC · Piso 16”. Está construido con React, TypeScript, Vite, Three.js, React Three Fiber y Drei.
 
 > **Estado de los datos:** toda la geometría arquitectónica, las dimensiones, la distribución, el mobiliario, las métricas y la representación exterior incluidas hoy son **DEMO / NO VERIFICADAS**. No constituyen un plano, relevamiento ni gemelo digital validado. No se usaron fotos internas, planos internos ni assets visuales de terceros para construir la escena actual.
 
 ## Qué incluye la base actual
 
 - Vista 3D WebGL del exterior y del piso, con cámara orbital, iluminación y postprocesado opcional.
+- Exterior procedural de Fase 2 con dos volúmenes abstractos, jardín alto, contexto urbano conceptual y detalle escalonado por calidad/distancia.
 - Recorrido guiado exterior → piso 16 → interior, con movimiento reducido cuando el navegador lo solicita.
-- Accesos de cámara para entrar a la sala, vista cenital, reinicio y captura local de la escena.
+- Accesos de cámara para entrar a la sala, vista cenital, reinicio y captura PNG local marcada `DEMO · NO VERIFICADO`.
 - Perfiles de calidad automático, rendimiento, equilibrado y cinematográfico.
+- Instancing para vegetación, paños del jardín, bloques de contexto y otros elementos repetidos del exterior.
 - Plano 2D y escena 3D derivados del mismo documento `vmc-spatial/6`.
 - Selección, alta, movimiento, rotación, duplicado y borrado de zonas y videowalls.
 - Edición de capacidad de islas, tamaño de objetos y composición de pantallas.
@@ -65,6 +67,8 @@ npm run format
 
 `npm run build` genera `dist/`. `npm run check` ya incluye typecheck, lint, tests y build. Para cambios de interacción o navegación se debe ejecutar también `npm run test:e2e`.
 
+El diagnóstico de render se habilita de forma explícita con `?diagnostics=1`. Mientras está activo, publica el último snapshot de draw calls, triángulos, memoria, DPR, viewport, etapa y calidad en `window.__VMC_SCENE_METRICS__`. Es una herramienta de medición; su existencia no demuestra por sí sola que se cumplan los presupuestos.
+
 ## Despliegue en Vercel
 
 La aplicación es una SPA Vite. [`vercel.json`](./vercel.json) define `dist/` como salida y reescribe las rutas a `index.html`.
@@ -96,6 +100,8 @@ Después del despliegue se debe comprobar: carga directa, refresh de la ruta, es
 - Las posiciones usan el plano de dominio `x/y`; el renderer las proyecta al plano Three.js `x/z` y reserva `y` para altura.
 - El ejemplo importable está en [`examples/room.demo.vmc-spatial-6.json`](./examples/room.demo.vmc-spatial-6.json).
 
+El exterior no forma parte del documento importable. Su contrato DEMO vive separado en `src/domain/exteriorSpec.ts`, no cambia ni amplía silenciosamente `vmc-spatial/6` y no se guarda en las exportaciones de sala. Sus medidas y relaciones son parámetros técnicos no validados físicamente.
+
 La forma, orientación, escala y contenido de la escena demo no deben reutilizarse como evidencia del espacio real. Ver [`DATA_MODEL.md`](./DATA_MODEL.md) y el [registro de supuestos y hechos](./docs/ASSUMPTIONS_AND_FACTS.md).
 
 ## Documentación
@@ -107,6 +113,7 @@ La forma, orientación, escala y contenido de la escena demo no deben reutilizar
 - [`docs/PHOTO_MEASUREMENT_CHECKLIST.md`](./docs/PHOTO_MEASUREMENT_CHECKLIST.md): captura autorizada de evidencia y medidas.
 - [`docs/ASSUMPTIONS_AND_FACTS.md`](./docs/ASSUMPTIONS_AND_FACTS.md): hechos confirmados, supuestos y pendientes.
 - [`docs/PHASE_0_AUDIT_AND_PHASE_1.md`](./docs/PHASE_0_AUDIT_AND_PHASE_1.md): diagnóstico, árbol propuesto y plan de Fase 1.
+- [`docs/PHASE_2_EXTERIOR.md`](./docs/PHASE_2_EXTERIOR.md): matriz de fuentes públicas, restricciones e incertidumbres del exterior procedural.
 
 ## Principios del proyecto
 
@@ -114,4 +121,6 @@ La forma, orientación, escala y contenido de la escena demo no deben reutilizar
 - WebGL es la ruta productiva primaria. WebGPU será experimental, opt-in y siempre tendrá fallback limpio a WebGL.
 - No se publican fotos, planos, accesos, cámaras, credenciales ni detalles operacionales internos sin revisión y autorización explícitas.
 - Las referencias visuales sirven como evidencia de diseño; no transfieren automáticamente derechos para copiarlas o redistribuirlas.
+- Las fuentes de Fase 2 son `REFERENCE ONLY / NO ASSET COPIED`: el runtime exterior usa exclusivamente geometría y materiales creados en código, sin fotos, texturas o modelos externos.
+- La UI y las capturas conservan una marca visible `DEMO · NO VERIFICADO` mientras no exista validación formal.
 - Cada afirmación de fidelidad debe estar respaldada por una fuente aprobada y quedar registrada.

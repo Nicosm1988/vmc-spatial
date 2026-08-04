@@ -2,9 +2,21 @@
 
 ## Estado actual
 
-La escena de esta etapa usa geometría, materiales y una textura procedural generados en código. **No se usaron fotos internas, planos internos, modelos 3D descargados ni texturas fotográficas externas para derivar la geometría actual.** Por lo tanto, la forma, fachada, entorno, distribución y mobiliario visibles son **DEMO / NO VERIFICADOS**.
+La escena de esta etapa usa geometría, materiales y texturas procedurales generados en código. **No se usaron fotos internas, planos internos, modelos 3D descargados ni texturas fotográficas externas para derivar la geometría actual.** El exterior de Fase 2 tampoco incorpora assets externos: sus fuentes públicas están registradas como referencia únicamente en [`docs/PHASE_2_EXTERIOR.md`](./docs/PHASE_2_EXTERIOR.md). Por lo tanto, la forma, fachada, entorno, distribución y mobiliario visibles son **DEMO / NO VERIFICADOS**.
 
-Las capturas generadas por pruebas o revisión visual no son assets de runtime ni evidencia de fidelidad.
+Las capturas generadas por pruebas o revisión visual no son assets de runtime ni evidencia de fidelidad. La descarga PNG de la aplicación incrusta visualmente la marca `DEMO · NO VERIFICADO`; esa marca no se debe retirar mientras la escena conserve esta clasificación.
+
+## Registro de referencias de Fase 2
+
+Rige la regla **REFERENCE ONLY / NO ASSET COPIED**:
+
+- las URLs públicas se consultaron para contrastar relaciones visuales y hechos generales;
+- no se descargó, copió, calcó, fotogrametrizó, convirtió ni incorporó ninguna foto, textura, plano, modelo, logo o pieza editorial;
+- una fotografía con licencia abierta sigue siendo sólo una referencia mientras no exista una decisión explícita de incorporación y un manifiesto completo;
+- la licencia de una fotografía no concede automáticamente derechos sobre marcas, logos, arquitectura u otros elementos representados;
+- los parámetros de `src/domain/exteriorSpec.ts` son aproximaciones procedurales DEMO y no una extracción métrica de las fuentes.
+
+La matriz de fuentes, fechas de acceso, restricciones e incertidumbres está en [`docs/PHASE_2_EXTERIOR.md`](./docs/PHASE_2_EXTERIOR.md). Como no entró ningún archivo externo al bundle, Fase 2 no agrega entradas al manifiesto de assets.
 
 ## Principio de admisión
 
@@ -96,6 +108,8 @@ Valores por defecto para runtime web:
 - ninguna textura, mesh o material queda vivo después de que su dueño se desmonta.
 
 Los presupuestos globales objetivo son menos de 200 draw calls y menos de 250.000 triángulos visibles en la escena base. El ingreso de cada asset debe acompañarse con medición antes/después, no solo tamaño en disco.
+
+El exterior procedural reduce detalle de fachada y densidad de contexto mediante LOD, y agrupa elementos repetidos con instancing. Para medir el runtime se puede habilitar `?diagnostics=1` y leer `window.__VMC_SCENE_METRICS__`. Estos datos deben registrarse con dispositivo, navegador, viewport, etapa y calidad; no se debe inferir cumplimiento a partir de una sola captura o de la existencia del diagnóstico.
 
 ## Materiales y realismo
 

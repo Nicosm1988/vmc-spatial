@@ -1,4 +1,5 @@
 import type { QualityPreference, ResolvedQuality } from '../domain/experience'
+import type { ExteriorDetail } from '../domain/exteriorSpec'
 
 export interface QualityProfile {
   dpr: number
@@ -6,6 +7,7 @@ export interface QualityProfile {
   shadowMapSize: 512 | 1024 | 2048
   contactShadowResolution: 0 | 256 | 512 | 1024
   postprocessing: boolean
+  exteriorDetail: ExteriorDetail
 }
 
 export const QUALITY_PROFILES: Record<ResolvedQuality, QualityProfile> = {
@@ -15,6 +17,7 @@ export const QUALITY_PROFILES: Record<ResolvedQuality, QualityProfile> = {
     shadowMapSize: 512,
     contactShadowResolution: 0,
     postprocessing: false,
+    exteriorDetail: 'mid',
   },
   balanced: {
     dpr: 1.25,
@@ -22,6 +25,7 @@ export const QUALITY_PROFILES: Record<ResolvedQuality, QualityProfile> = {
     shadowMapSize: 1024,
     contactShadowResolution: 512,
     postprocessing: false,
+    exteriorDetail: 'near',
   },
   cinematic: {
     dpr: 1.75,
@@ -29,6 +33,7 @@ export const QUALITY_PROFILES: Record<ResolvedQuality, QualityProfile> = {
     shadowMapSize: 2048,
     contactShadowResolution: 1024,
     postprocessing: true,
+    exteriorDetail: 'near',
   },
 }
 
