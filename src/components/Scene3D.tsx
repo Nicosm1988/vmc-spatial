@@ -13,6 +13,9 @@ import { QUALITY_PROFILES } from '../scene/qualityProfiles'
 import { useExperienceStore } from '../state/useExperienceStore'
 import CameraDirector from '../scene/CameraDirector'
 import type { CamApi, OrbitControlsHandle } from '../scene/cameraTypes'
+import SceneMetrics from '../scene/SceneMetrics'
+import { EXTERIOR_DEMO_SPEC } from '../domain/exteriorSpec'
+import { mmToMeters } from '../domain/units'
 
 const CinematicEffects = lazy(() => import('../scene/CinematicEffects'))
 
@@ -97,6 +100,10 @@ export default function Scene3D({
   const quality = useExperienceStore((state) => state.resolvedQuality)
   const profile = QUALITY_PROFILES[quality]
   const isInterior = stage === 'interior'
+  const diagnosticsEnabled = useMemo(
+    () => new URLSearchParams(window.location.search).get('diagnostics') === '1',
+    [],
+  )
 
   const floorGeometry = useMemo(() => slab(doc.plate, 0.3), [doc.plate])
   const coreGeometry = useMemo(() => slab(doc.core, 0.14), [doc.core])
@@ -210,7 +217,11 @@ export default function Scene3D({
       shadows={profile.shadows}
       dpr={Math.min(profile.dpr, window.devicePixelRatio || 1)}
       camera={{
-        position: [centerX - 150, 78, centerZ + 220],
+        position: [
+          centerX - mmToMeters(EXTERIOR_DEMO_SPEC.heightMm) * 0.94,
+          mmToMeters(EXTERIOR_DEMO_SPEC.heightMm) * 0.49,
+          centerZ + mmToMeters(EXTERIOR_DEMO_SPEC.heightMm) * 1.375,
+        ],
         fov: 44,
         near: 0.1,
         far: 4000,
@@ -219,7 +230,7 @@ export default function Scene3D({
         antialias: !profile.postprocessing,
         powerPreference: 'high-performance',
         toneMapping: THREE.ACESFilmicToneMapping,
-        toneMappingExposure: night ? 0.9 : 1.02,
+        toneMappingExposure: night ? 1.12 : 1.02,
         preserveDrawingBuffer: true,
       }}
       onPointerMissed={() => onSelect(null)}
@@ -238,13 +249,13 @@ export default function Scene3D({
       )}
       <fog
         attach="fog"
-        args={[night ? '#05070f' : '#bcd2e6', isInterior ? 180 : 300, isInterior ? 520 : 1050]}
+        args={[night ? '#08111d' : '#bcd2e6', isInterior ? 180 : 300, isInterior ? 520 : 1050]}
       />
-      <hemisphereLight args={[night ? '#1a2840' : '#f0f6ff', '#40453f', night ? 0.42 : 1.05]} />
-      <ambientLight intensity={night ? 0.24 : 0.32} />
+      <hemisphereLight args={[night ? '#355579' : '#f0f6ff', '#27362f', night ? 0.72 : 1.05]} />
+      <ambientLight intensity={night ? 0.4 : 0.32} />
       <directionalLight
         position={[centerX + 100, 150, centerZ - 50]}
-        intensity={night ? 0.65 : 2.15}
+        intensity={night ? 0.9 : 2.15}
         color={night ? '#9fb4e0' : '#fff3e0'}
         castShadow={profile.shadows}
         shadow-mapSize-width={profile.shadowMapSize}
@@ -253,13 +264,34 @@ export default function Scene3D({
       >
         <orthographicCamera attach="shadow-camera" args={[-100, 100, 100, -100, 0.1, 520]} />
       </directionalLight>
+      <directionalLight
+        position={[centerX - 130, 96, centerZ + 190]}
+        intensity={night ? 0.55 : 0.82}
+        color={night ? '#496582' : '#d9edff'}
+      />
 
       {!isInterior ? (
         <group>
-          <Entorno centerX={centerX} centerZ={centerZ} noche={night} />
-          <TorreYPF centerX={centerX} centerZ={centerZ} noche={night} />
+          <Entorno
+            centerX={centerX}
+            centerZ={centerZ}
+            noche={night}
+            detail={profile.exteriorDetail}
+          />
+          <TorreYPF
+            centerX={centerX}
+            centerZ={centerZ}
+            noche={night}
+            detail={profile.exteriorDetail}
+          />
           {stage !== 'exterior' ? (
-            <group position={[centerX - 19, 1.4, centerZ + 19]}>
+            <group
+              position={[
+                centerX + mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.x),
+                mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.elevation),
+                centerZ + mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.y),
+              ]}
+            >
               <mesh>
                 <ringGeometry args={[1.1, 1.42, 32]} />
                 <meshBasicMaterial
@@ -492,6 +524,7 @@ export default function Scene3D({
         touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
       />
       <CameraDirector camApiRef={camApi} center={cameraCenter} controlsRef={controls} />
+      {diagnosticsEnabled ? <SceneMetrics stage={stage} quality={quality} /> : null}
 
       {profile.postprocessing ? (
         <Suspense fallback={null}>

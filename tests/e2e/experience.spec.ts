@@ -48,4 +48,90 @@ test.describe('VMC Spatial experience', () => {
     await expect(page.locator('svg.plan-svg')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Plano' })).toHaveClass(/active/)
   })
+
+  test('keeps Phase 2 diagnostics, night preference and demo classification observable', async ({
+    page,
+  }, testInfo) => {
+    const consoleErrors: string[] = []
+    const pageErrors: string[] = []
+
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text())
+    })
+    page.on('pageerror', (error) => pageErrors.push(error.message))
+
+    await page.goto('/?diagnostics=1')
+
+    const disclaimer = page.getByLabel('Clasificación de la escena')
+    await expect(disclaimer).toContainText('DEMO · NO VERIFICADO')
+
+    await page.waitForFunction(() => {
+      const metrics = (
+        window as Window & {
+          __VMC_SCENE_METRICS__?: {
+            calls: number
+            triangles: number
+            lines: number
+            points: number
+            geometries: number
+            textures: number
+            programs: number
+            dpr: number
+            viewport: { width: number; height: number }
+            frame: number
+            timestamp: number
+          }
+        }
+      ).__VMC_SCENE_METRICS__
+
+      if (!metrics) return false
+      const values = [
+        metrics.calls,
+        metrics.triangles,
+        metrics.lines,
+        metrics.points,
+        metrics.geometries,
+        metrics.textures,
+        metrics.programs,
+        metrics.dpr,
+        metrics.viewport.width,
+        metrics.viewport.height,
+        metrics.frame,
+        metrics.timestamp,
+      ]
+      return values.every((value) => Number.isFinite(value)) && metrics.frame > 0
+    })
+
+    const metrics = await page.evaluate(
+      () =>
+        (
+          window as Window & {
+            __VMC_SCENE_METRICS__?: Record<string, unknown>
+          }
+        ).__VMC_SCENE_METRICS__,
+    )
+    expect(metrics).toBeDefined()
+    expect(metrics).not.toBeNull()
+    expect(Number(metrics?.calls)).toBeLessThan(200)
+    expect(Number(metrics?.triangles)).toBeLessThan(250_000)
+    await testInfo.attach('phase-2-scene-metrics', {
+      body: JSON.stringify(metrics, null, 2),
+      contentType: 'application/json',
+    })
+
+    const dayNight = page.getByRole('button', { name: 'Alternar día y noche' })
+    await expect(dayNight).toHaveText('Día')
+    await dayNight.click()
+    await expect(dayNight).toHaveText('Noche')
+
+    await page.reload()
+    await expect(page.getByRole('button', { name: 'Alternar día y noche' })).toHaveText('Noche')
+
+    await page.getByRole('button', { name: 'Plano' }).click()
+    await expect(page.locator('svg.plan-svg')).toBeVisible()
+    await expect(disclaimer).toContainText('DEMO · NO VERIFICADO')
+
+    expect(consoleErrors, `console.error: ${consoleErrors.join('\n')}`).toEqual([])
+    expect(pageErrors, `pageerror: ${pageErrors.join('\n')}`).toEqual([])
+  })
 })

@@ -4,7 +4,7 @@
 
 VMC Spatial es hoy una SPA cliente construida con React + Vite. El árbol existente agrupa la composición en `src/App.tsx`, el render y los controles en `src/components/`, el preset en `src/data/` y utilidades de geometría/persistencia en `src/lib/`.
 
-La Fase 1 evoluciona esa base sin una migración masiva. El objetivo de arquitectura es que la escena mínima, la cámara, la iluminación, la navegación y la validación sean una plataforma segura para aumentar fidelidad después. Toda geometría y dato espacial actual sigue clasificado como **DEMO / NO VERIFICADO**.
+La Fase 1 evolucionó esa base sin una migración masiva. La Fase 2 agrega un exterior procedural como vertical separado, con LOD, instancing y diagnóstico opt-in, sin cambiar el contrato importable de la sala. Toda geometría y dato espacial actual sigue clasificado como **DEMO / NO VERIFICADO**.
 
 ## Flujo de ejecución actual
 
@@ -14,14 +14,22 @@ import JSON ────┴─> validación Zod vmc-spatial/6 ─┐
 preset TS tipado ─────────────────────────────────┴─> estado de aplicación
                                                       │
                                                       ├─> plano 2D
-                                                      ├─> escena WebGL 3D
+                                                      ├─> interior WebGL 3D
                                                       ├─> inspector/editor
                                                       └─> export JSON + autosave
+
+EXTERIOR_DEMO_SPEC ──> adaptador mm→m ──> exterior WebGL procedural
+       │                                         │
+       └─ status demo-unverified                 ├─> LOD de fachada
+                                                 ├─> contexto conceptual
+                                                 └─> diagnóstico opt-in
 ```
 
 La validación de carga e importación ya forma parte de Fase 1. El preset está tipado, pero debe cruzar la validación de runtime antes de considerar cerrada la frontera; guardado/exportación reciben hoy el documento controlado por la aplicación y deben validar si en el futuro aceptan otra fuente.
 
 Existe un único `VmcDocument` canónico. Selección, modo, cámara, calidad y otros controles de interfaz son estado efímero y no deben mezclarse con el documento exportable.
+
+`EXTERIOR_DEMO_SPEC` es otro contrato de dominio, deliberadamente separado. Describe massing, jardín, contexto conceptual, anclas DEMO y umbrales de LOD en milímetros enteros. No se serializa dentro de `VmcDocument`, no participa de import/export y no modifica la interpretación de `schema: "vmc-spatial/6"`. Sus parámetros públicos siguen siendo hipótesis visuales, no hechos físicos confirmados.
 
 ## Decisiones estructurales
 
@@ -53,7 +61,7 @@ Dexie/IndexedDB se difiere hasta que existan necesidades reales de historial, ca
 
 ### Assets y evidencia
 
-La escena actual se construye con geometría y materiales generados en código. No se usaron fotos ni modelos externos para derivarla. En fases posteriores, los assets solo cruzarán la frontera de `assets/` si tienen procedencia, licencia y aprobación documentadas. Las fotos de relevamiento son evidencia restringida, no assets públicos por defecto.
+La escena actual se construye con geometría, materiales y texturas procedurales generados en código. La investigación de Fase 2 se registró en [`docs/PHASE_2_EXTERIOR.md`](./docs/PHASE_2_EXTERIOR.md) bajo la regla `REFERENCE ONLY / NO ASSET COPIED`: no se incorporaron fotos, modelos, planos, logos ni texturas externas. En fases posteriores, los assets solo cruzarán la frontera de `assets/` si tienen procedencia, licencia y aprobación documentadas. Las fotos de relevamiento son evidencia restringida, no assets públicos por defecto.
 
 ## Límites objetivo
 
@@ -88,10 +96,12 @@ src/
   app/                    # composición y providers
   domain/
     room/                 # tipos, schema e invariantes
+    exterior/             # contrato DEMO separado; no forma parte de vmc-spatial/6
     geometry/             # matemática pura en mm
   scene/
     cameras/
     environment/
+    exterior/             # massing, fachada, contexto, LOD e instancing
     room/
     rendering/            # WebGL y calidad; WebGPU experimental futuro
   editor/
@@ -143,7 +153,7 @@ Las tres experiencias objetivo son:
 2. vuelo libre exterior → piso 16;
 3. navegación interior en primera persona.
 
-La Fase 1 ofrece cámara orbital, transición guiada exterior → piso 16 → interior y atajos cenital/reset. Vuelo libre, primera persona y colisiones siguen pendientes; no deben documentarse como terminados.
+La Fase 1 ofrece cámara orbital, transición guiada exterior → piso 16 → interior y atajos cenital/reset. La Fase 2 conserva ese recorrido sobre el nuevo exterior procedural y marca toda captura PNG con `DEMO · NO VERIFICADO`. Vuelo libre, primera persona y colisiones siguen pendientes; no deben documentarse como terminados.
 
 ## Iluminación y calidad
 
@@ -158,6 +168,15 @@ Presupuestos deseados para la escena base:
 - assets pesados lazy-loaded y repetidos mediante instancing.
 
 Son objetivos de aceptación. Solo se puede declarar cumplimiento después de registrar dispositivo, navegador, resolución, preset, escena y medición.
+
+### LOD, instancing y diagnóstico exterior
+
+- La calidad resuelta fija un techo de detalle exterior: rendimiento usa detalle medio; equilibrada y cinematográfica habilitan detalle cercano.
+- La fachada usa niveles cercano, medio y lejano; al aumentar la distancia reduce bandas y líneas hasta conservar sólo el massing.
+- La densidad del contexto conceptual también se reduce por nivel de detalle.
+- Vegetación, paños del jardín, bloques de contexto y columnas repetidas usan `InstancedMesh` y geometrías compartidas.
+- `?diagnostics=1` monta el colector de métricas y expone `window.__VMC_SCENE_METRICS__` con draw calls, triángulos, líneas, puntos, geometrías, texturas, programas, DPR, viewport, etapa y calidad.
+- El colector es opt-in, se desmonta de forma limpia y no convierte los presupuestos objetivo en afirmaciones de cumplimiento.
 
 ## Paredes, aberturas y repetición
 
@@ -177,17 +196,17 @@ Son objetivos de aceptación. Solo se puede declarar cumplimiento después de re
 
 ## Pruebas por límite
 
-- `domain`: schema, invariantes, conversión de unidades, geometría pura y migraciones.
+- `domain`: schema de sala, contrato exterior separado, invariantes, conversión de unidades, geometría pura y migraciones.
 - `persistence`: localStorage corrupto/ausente, límite de archivo, import/export round-trip.
 - `editor`: comandos, snap, IDs, duplicado, borrado y futuro undo/redo.
-- `scene`: smoke tests, creación/destrucción, selección y fallback; perfiles de rendimiento fuera de unit tests.
+- `scene`: geometría procedural exterior, LOD, smoke tests, creación/destrucción, selección y fallback; perfiles de rendimiento fuera de unit tests.
 - `ui`: teclado, nombres accesibles, foco, reduced motion y estados de carga/error.
 - E2E: carga, cambio 2D/3D, entrada a sala, edición, persistencia, reset e import/export.
 
 ## Roadmap de arquitectura
 
-- **Fase 1:** robustecer renderer WebGL, cámara, iluminación, navegación mínima, validación y herramientas de calidad.
-- **Fase 2:** exterior estilizado basado solo en referencias públicas permitidas y procedencia documentada.
+- **Fase 1:** renderer WebGL, cámara, iluminación, navegación mínima, validación y herramientas de calidad.
+- **Fase 2 (actual):** exterior procedural estilizado, contrato separado, referencias públicas documentadas, LOD, instancing, diagnóstico y capturas marcadas; continúa DEMO.
 - **Fase 3:** transición cinematográfica hacia piso 16 con fallback de movimiento reducido.
 - **Fase 4:** catálogo paramétrico, edición avanzada, objetos versionados e instancing.
 - **Fase 5:** Dexie/IndexedDB, migraciones, undo/redo, import/export ampliado y plano 2D consolidado.

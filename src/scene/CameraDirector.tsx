@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { SceneStage } from '../domain/experience'
+import { EXTERIOR_DEMO_SPEC } from '../domain/exteriorSpec'
+import { mmToMeters } from '../domain/units'
 import { useExperienceStore } from '../state/useExperienceStore'
 import type { CamApiRef, OrbitControlsHandle } from './cameraTypes'
 
@@ -32,14 +34,26 @@ function easeInOutCubic(value: number) {
 }
 
 function makePreset(stage: SceneStage, cx: number, cz: number): CameraPreset {
+  const exteriorHeight = mmToMeters(EXTERIOR_DEMO_SPEC.heightMm)
   switch (stage) {
     case 'approach16':
-    case 'floor16':
+    case 'floor16': {
+      const anchorX = cx + mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.x)
+      const anchorZ = cz + mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.y)
       return {
-        position: new THREE.Vector3(cx - 34, 7.5, cz + 52),
-        target: new THREE.Vector3(cx, 1.5, cz),
+        position: new THREE.Vector3(
+          anchorX - exteriorHeight * 0.48,
+          exteriorHeight * 0.075,
+          anchorZ + exteriorHeight * 0.66,
+        ),
+        target: new THREE.Vector3(
+          anchorX,
+          mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.elevation),
+          anchorZ,
+        ),
         duration: 2.8,
       }
+    }
     case 'interior':
       return {
         position: new THREE.Vector3(cx - 5.5, 2.35, cz + 8.5),
@@ -49,8 +63,12 @@ function makePreset(stage: SceneStage, cx: number, cz: number): CameraPreset {
     case 'exterior':
     default:
       return {
-        position: new THREE.Vector3(cx - 150, 78, cz + 220),
-        target: new THREE.Vector3(cx, 17, cz),
+        position: new THREE.Vector3(
+          cx - exteriorHeight * 0.94,
+          exteriorHeight * 0.49,
+          cz + exteriorHeight * 1.375,
+        ),
+        target: new THREE.Vector3(cx, exteriorHeight * 0.10625, cz),
         duration: 2.25,
       }
   }
@@ -140,7 +158,26 @@ export default function CameraDirector({ center, controlsRef, camApiRef }: Camer
       },
       enter: enterInterior,
       capture: () => {
-        const url = gl.domElement.toDataURL('image/png')
+        const source = gl.domElement
+        const exportCanvas = document.createElement('canvas')
+        exportCanvas.width = source.width
+        exportCanvas.height = source.height
+        const context = exportCanvas.getContext('2d')
+        if (!context) return
+
+        context.drawImage(source, 0, 0)
+        const scale = Math.max(1, exportCanvas.width / Math.max(1, source.clientWidth))
+        const padding = 16 * scale
+        const fontSize = 12 * scale
+        const label = 'DEMO · NO VERIFICADO'
+        context.font = `700 ${fontSize}px system-ui, sans-serif`
+        const width = context.measureText(label).width + padding * 1.5
+        context.fillStyle = 'rgba(3, 12, 20, 0.78)'
+        context.fillRect(padding, exportCanvas.height - padding * 3, width, padding * 2)
+        context.fillStyle = '#78efe1'
+        context.fillText(label, padding * 1.65, exportCanvas.height - padding * 1.7)
+
+        const url = exportCanvas.toDataURL('image/png')
         const link = document.createElement('a')
         link.href = url
         link.download = `vmc-spatial-${Date.now()}.png`
