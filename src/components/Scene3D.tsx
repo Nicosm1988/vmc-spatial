@@ -16,6 +16,8 @@ import type { CamApi, OrbitControlsHandle } from '../scene/cameraTypes'
 import SceneMetrics from '../scene/SceneMetrics'
 import { EXTERIOR_DEMO_SPEC } from '../domain/exteriorSpec'
 import { mmToMeters } from '../domain/units'
+import { AccessPortal } from '../scene/exterior/AccessPortal'
+import PerformanceInterior from '../scene/interior/PerformanceInterior'
 
 const CinematicEffects = lazy(() => import('../scene/CinematicEffects'))
 
@@ -96,10 +98,14 @@ export default function Scene3D({
   const controls = useRef<OrbitControlsHandle | null>(null)
   const drag = useRef<{ id: string; obj: THREE.Object3D } | null>(null)
   const stage = useExperienceStore((state) => state.stage)
+  const activeScene = useExperienceStore((state) => state.activeScene)
+  const showAccessPortal = useExperienceStore(
+    (state) => state.stage === 'floor16' || state.transition !== null,
+  )
   const night = useExperienceStore((state) => state.night)
   const quality = useExperienceStore((state) => state.resolvedQuality)
   const profile = QUALITY_PROFILES[quality]
-  const isInterior = stage === 'interior'
+  const isInterior = activeScene === 'interior'
   const diagnosticsEnabled = useMemo(
     () => new URLSearchParams(window.location.search).get('diagnostics') === '1',
     [],
@@ -143,6 +149,13 @@ export default function Scene3D({
     },
     [carpet, carpetDark],
   )
+
+  useEffect(() => {
+    if (editing) return
+    drag.current = null
+    document.body.style.cursor = 'auto'
+    if (controls.current) controls.current.enabled = true
+  }, [editing])
 
   function planePoint(event: { ray: THREE.Ray }) {
     const denominator = event.ray.direction.y
@@ -284,27 +297,12 @@ export default function Scene3D({
             noche={night}
             detail={profile.exteriorDetail}
           />
-          {stage !== 'exterior' ? (
-            <group
-              position={[
-                centerX + mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.x),
-                mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.elevation),
-                centerZ + mmToMeters(EXTERIOR_DEMO_SPEC.demoEntryAnchorMm.y),
-              ]}
-            >
-              <mesh>
-                <ringGeometry args={[1.1, 1.42, 32]} />
-                <meshBasicMaterial
-                  color="#31d7c5"
-                  transparent
-                  opacity={0.9}
-                  side={THREE.DoubleSide}
-                />
-              </mesh>
-              <pointLight color="#31d7c5" intensity={5} distance={16} />
-            </group>
+          {showAccessPortal ? (
+            <AccessPortal centerX={centerX} centerZ={centerZ} night={night} />
           ) : null}
         </group>
+      ) : !editing ? (
+        <PerformanceInterior doc={doc} night={night} insight={insight} roof={techo} />
       ) : (
         <group>
           <mesh

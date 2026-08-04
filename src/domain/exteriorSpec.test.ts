@@ -9,6 +9,7 @@ import {
 function collectIds(spec: ExteriorDemoSpec): string[] {
   return [
     spec.id,
+    spec.demoEntryPortal.id,
     ...spec.massing.map((volume) => volume.id),
     spec.garden.id,
     ...spec.garden.modules.map((module) => module.id),
@@ -34,6 +35,7 @@ describe('exterior demo specification', () => {
 
     expect(second).toBe(first)
     expect(Object.isFrozen(EXTERIOR_DEMO_SPEC)).toBe(true)
+    expect(Object.isFrozen(EXTERIOR_DEMO_SPEC.demoEntryPortal)).toBe(true)
     expect(Object.isFrozen(EXTERIOR_DEMO_SPEC.massing)).toBe(true)
     expect(Object.isFrozen(EXTERIOR_DEMO_SPEC.garden.modules[0])).toBe(true)
   })
@@ -51,6 +53,19 @@ describe('exterior demo specification', () => {
     expect(EXTERIOR_DEMO_SPEC.garden.placement).toBe('near-top')
     expect(EXTERIOR_DEMO_SPEC.garden.modules).toHaveLength(6)
     expect(EXTERIOR_DEMO_SPEC.site.classification).toBe('conceptual')
+    expect(EXTERIOR_DEMO_SPEC.demoEntryPortal.classification).toBe('conceptual')
+    expect(EXTERIOR_DEMO_SPEC.demoEntryPortal.sizeMm).toEqual({
+      width: 4_200,
+      depth: 160,
+      height: 2_800,
+    })
+    expect(EXTERIOR_DEMO_SPEC.site.elements.map((element) => element.kind)).toEqual([
+      'ground',
+      'green-ring',
+      'promenade',
+      'street',
+      'water',
+    ])
     expect(EXTERIOR_DEMO_SPEC.lod).toEqual({
       nearMaxDistanceMm: 110_000,
       midMaxDistanceMm: 360_000,
@@ -65,6 +80,20 @@ describe('exterior demo specification', () => {
     const millimeterValues = collectMillimeterValues(EXTERIOR_DEMO_SPEC)
     expect(millimeterValues.length).toBeGreaterThan(0)
     expect(millimeterValues.every(Number.isInteger)).toBe(true)
+  })
+
+  it('rejects a portal frame that closes its conceptual opening', () => {
+    const invalidPortalSpec: ExteriorDemoSpec = {
+      ...EXTERIOR_DEMO_SPEC,
+      demoEntryPortal: {
+        ...EXTERIOR_DEMO_SPEC.demoEntryPortal,
+        frameThicknessMm: 1_400,
+      },
+    }
+
+    expect(validateExteriorSpec(invalidPortalSpec)).toContain(
+      'demoEntryPortal.frameThicknessMm must leave a positive inner opening',
+    )
   })
 })
 

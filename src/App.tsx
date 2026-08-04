@@ -18,6 +18,7 @@ import QualitySelector from './ui/QualitySelector'
 import SceneErrorBoundary from './ui/SceneErrorBoundary'
 import SceneLoadingOverlay from './ui/SceneLoadingOverlay'
 import TransitionStatus from './ui/TransitionStatus'
+import CinematicHandoff from './ui/CinematicHandoff'
 import WebGLFallback from './ui/WebGLFallback'
 import { supportsWebGL } from './lib/webgl'
 
@@ -128,6 +129,7 @@ export default function App() {
   const toggleNight = useExperienceStore((state) => state.toggleNight)
   const qualityPreference = useExperienceStore((state) => state.qualityPreference)
   const setResolvedQuality = useExperienceStore((state) => state.setResolvedQuality)
+  const setReducedMotion = useExperienceStore((state) => state.setReducedMotion)
   const cancelTransition = useExperienceStore((state) => state.cancelTransition)
 
   const editing = mode !== 'explorar'
@@ -142,11 +144,14 @@ export default function App() {
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const resolve = () => setResolvedQuality(resolveQuality(qualityPreference, readDeviceHints()))
+    const resolve = () => {
+      setReducedMotion(media.matches)
+      setResolvedQuality(resolveQuality(qualityPreference, readDeviceHints()))
+    }
     resolve()
     media.addEventListener('change', resolve)
     return () => media.removeEventListener('change', resolve)
-  }, [qualityPreference, setResolvedQuality])
+  }, [qualityPreference, setReducedMotion, setResolvedQuality])
 
   useEffect(() => {
     function onEscape(event: KeyboardEvent) {
@@ -347,10 +352,14 @@ export default function App() {
   function setAppMode(nextMode: AppMode) {
     setMode(nextMode)
     if (nextMode === 'editar3d') setView('3d')
-    if (nextMode === 'editar2d') setView('2d')
+    if (nextMode === 'editar2d') {
+      cancelTransition()
+      setView('2d')
+    }
   }
 
   function openPlan() {
+    cancelTransition()
     setView('2d')
     if (mode === 'editar3d') setMode('editar2d')
   }
@@ -468,6 +477,7 @@ export default function App() {
         {view === '3d' && stage === 'interior' ? <CameraPanel camApi={camApi} /> : null}
         {view === '2d' || stage === 'interior' ? <InsightsLegend insight={insight} /> : null}
         {view === '3d' ? <TransitionStatus /> : null}
+        {view === '3d' ? <CinematicHandoff /> : null}
 
         <div className="scene-disclaimer" role="status" aria-label="Clasificación de la escena">
           <span>DEMO · NO VERIFICADO</span>

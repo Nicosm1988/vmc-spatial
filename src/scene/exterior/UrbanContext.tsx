@@ -103,65 +103,6 @@ function TreeInstances({
   )
 }
 
-function ContextBlocks({
-  centerX,
-  centerZ,
-  night,
-  detail,
-  template,
-}: {
-  centerX: number
-  centerZ: number
-  night: boolean
-  detail: ExteriorDetail
-  template: ExteriorSiteElementSpec
-}) {
-  const meshRef = useRef<THREE.InstancedMesh>(null)
-  const count = detail === 'near' ? 8 : detail === 'mid' ? 5 : 3
-  const baseWidth = mmToMeters(template.sizeMm.width)
-  const baseDepth = mmToMeters(template.sizeMm.depth)
-  const baseHeight = mmToMeters(template.sizeMm.height)
-  const ground = mmToMeters(template.elevationMm)
-
-  useLayoutEffect(() => {
-    if (!meshRef.current) return
-    const matrix = new THREE.Matrix4()
-    for (let index = 0; index < count; index += 1) {
-      const column = index % 3
-      const row = Math.floor(index / 3)
-      const width = baseWidth * (0.76 + (index % 3) * 0.16)
-      const depth = baseDepth * (0.82 + ((index + 1) % 3) * 0.14)
-      const height = baseHeight * (0.42 + ((index * 5) % 7) * 0.07)
-      const x = centerX + mmToMeters(template.centerMm.x) + (column - 1) * baseWidth * 1.65
-      const z = centerZ + mmToMeters(template.centerMm.y) + row * baseDepth * 1.8
-      matrix.compose(
-        new THREE.Vector3(x, ground + height / 2, z),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, (index % 2) * 0.09, 0)),
-        new THREE.Vector3(width, height, depth),
-      )
-      meshRef.current.setMatrixAt(index, matrix)
-    }
-    meshRef.current.instanceMatrix.needsUpdate = true
-    meshRef.current.computeBoundingSphere()
-  }, [baseDepth, baseHeight, baseWidth, centerX, centerZ, count, ground, template])
-
-  return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, count]}
-      castShadow={detail === 'near'}
-      receiveShadow
-    >
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial
-        color={night ? '#111b2a' : '#8fa6b5'}
-        metalness={night ? 0.26 : 0.08}
-        roughness={0.52}
-      />
-    </instancedMesh>
-  )
-}
-
 function Pergola({
   centerX,
   centerZ,
@@ -234,7 +175,6 @@ export function UrbanContext({ centerX, centerZ, noche, detail = 'near' }: Urban
   const promenade = requireSiteElement('promenade')
   const street = requireSiteElement('street')
   const water = requireSiteElement('water')
-  const contextBlock = requireSiteElement('context-block')
 
   return (
     <group name={EXTERIOR_DEMO_SPEC.site.id}>
@@ -317,13 +257,6 @@ export function UrbanContext({ centerX, centerZ, noche, detail = 'near' }: Urban
         night={noche}
         detail={detail}
         ring={greenRing}
-      />
-      <ContextBlocks
-        centerX={centerX}
-        centerZ={centerZ}
-        night={noche}
-        detail={detail}
-        template={contextBlock}
       />
       {detail === 'near' ? (
         <Pergola centerX={centerX} centerZ={centerZ} promenade={promenade} night={noche} />
