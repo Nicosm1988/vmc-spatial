@@ -1,8 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import type { AppMode, InsightKey, VideoWall, ViewKind, VmcDocument, Zone, ZoneKind } from './types'
-import { VMC_PISO_16 } from './data/vmcPiso16'
+import type { AppMode, InsightKey, ViewKind, VmcDocument, Zone, ZoneKind } from './types'
+import { VIDEO_WALL_CORE_EDGE, VMC_PISO_16 } from './data/vmcPiso16'
 import { INSIGHT_ORDER, INSIGHTS } from './lib/insights'
-import { wallGeom, wallFrom } from './lib/geometry'
 import { clearDoc, exportJson, importJson, loadDoc, saveDoc } from './lib/persistence'
 import Plan2D from './components/Plan2D'
 import Structure from './components/Structure'
@@ -23,32 +22,45 @@ import { supportsWebGL } from './lib/webgl'
 
 const Scene3D = lazy(() => import('./components/Scene3D'))
 
-interface WallPatch {
-  cx?: number
-  cy?: number
-  len?: number
-  ang?: number
-  pantallas?: number
-  filas?: number
-  flip?: boolean
-}
-
 function normalizeWalls(document: VmcDocument): VmcDocument {
-  const coreCenterX = document.core.reduce((sum, point) => sum + point.x, 0) / document.core.length
-  const coreCenterY = document.core.reduce((sum, point) => sum + point.y, 0) / document.core.length
+  const canonicalWallIds = new Set(Object.keys(VIDEO_WALL_CORE_EDGE))
+  const isVmcPiso16 =
+    document.nombre === VMC_PISO_16.nombre ||
+    document.piso.includes('Torre YPF') ||
+    document.videoWalls.some((wall) => canonicalWallIds.has(wall.id))
+
+  if (!isVmcPiso16) return document
+
+  const core =
+    document.core.length === VMC_PISO_16.core.length
+      ? document.core
+      : structuredClone(VMC_PISO_16.core)
+  const requiredOffice = VMC_PISO_16.zonas.find((zone) => zone.id === 'of-central')
+  const zonesWithoutSupersededTipTables = document.zonas.filter(
+    (zone) => zone.id !== 'com-e1' && zone.id !== 'com-e2',
+  )
+  const zonas =
+    requiredOffice && !zonesWithoutSupersededTipTables.some((zone) => zone.id === requiredOffice.id)
+      ? [...zonesWithoutSupersededTipTables, structuredClone(requiredOffice)]
+      : zonesWithoutSupersededTipTables
 
   return {
     ...document,
-    videoWalls: document.videoWalls.map((wall) => {
-      if (wall.flip !== undefined) return wall
-      const centerX = (wall.x1 + wall.x2) / 2
-      const centerY = (wall.y1 + wall.y2) / 2
-      const angle = Math.atan2(-(wall.y2 - wall.y1), wall.x2 - wall.x1)
-      const normalX = Math.sin(angle)
-      const normalZ = Math.cos(angle)
+    core,
+    zonas,
+    videoWalls: VMC_PISO_16.videoWalls.map((requiredWall) => {
+      const existing = document.videoWalls.find((wall) => wall.id === requiredWall.id)
+      const edgeIndex = VIDEO_WALL_CORE_EDGE[requiredWall.id as keyof typeof VIDEO_WALL_CORE_EDGE]
+      const start = core[edgeIndex]!
+      const end = core[(edgeIndex + 1) % core.length]!
       return {
-        ...wall,
-        flip: normalX * (centerX - coreCenterX) + normalZ * (centerY - coreCenterY) < 0,
+        ...requiredWall,
+        x1: start.x,
+        y1: start.y,
+        x2: end.x,
+        y2: end.y,
+        nombre: existing?.nombre ?? requiredWall.nombre,
+        flip: true,
       }
     }),
   }
@@ -130,6 +142,7 @@ export default function App() {
   const setResolvedQuality = useExperienceStore((state) => state.setResolvedQuality)
   const setReducedMotion = useExperienceStore((state) => state.setReducedMotion)
   const cancelTransition = useExperienceStore((state) => state.cancelTransition)
+  const enterInterior = useExperienceStore((state) => state.enterInterior)
 
   const editing = mode !== 'explorar'
   const showPanels = editing || view === '2d'
@@ -181,42 +194,9 @@ export default function App() {
     }))
   }
 
-  function patchWall(id: string, patch: WallPatch) {
-    setDoc((current) => ({
-      ...current,
-      actualizado: new Date().toISOString(),
-      videoWalls: current.videoWalls.map((wall) => {
-        if (wall.id !== id) return wall
-        const geometry = wallGeom(wall)
-        const centerX = patch.cx ?? geometry.cx
-        const centerY = patch.cy ?? geometry.cy
-        const length = patch.len ?? geometry.len
-        const angle = patch.ang ?? geometry.ang
-        const endpoints = wallFrom(centerX, centerY, length, angle)
-        return {
-          ...wall,
-          ...endpoints,
-          pantallas: patch.pantallas ?? wall.pantallas,
-          filas: patch.filas ?? wall.filas,
-          flip: patch.flip ?? wall.flip,
-        }
-      }),
-    }))
-  }
-
-  function flipWall(id: string) {
-    const wall = doc.videoWalls.find((item) => item.id === id)
-    if (!wall) return
-    patchWall(id, { flip: !wall.flip })
-    flash('Lado de pantallas actualizado')
-  }
-
   function moveAny(id: string, centerXmm: number, centerYmm: number) {
-    if (doc.videoWalls.some((wall) => wall.id === id)) {
-      patchWall(id, { cx: centerXmm, cy: centerYmm })
-    } else {
-      patchZone(id, { cx: centerXmm, cy: centerYmm })
-    }
+    if (doc.videoWalls.some((wall) => wall.id === id)) return
+    patchZone(id, { cx: centerXmm, cy: centerYmm })
   }
 
   function addZone(kind: ZoneKind) {
@@ -226,49 +206,21 @@ export default function App() {
     flash('Objeto agregado')
   }
 
-  function addWall() {
-    const id = `wall-${Date.now()}-${sequence++}`
-    const endpoints = wallFrom(12000, 12000, 8000, 0)
-    const wall: VideoWall = {
-      id,
-      nombre: 'Pared nueva',
-      ...endpoints,
-      pantallas: 12,
-      filas: 2,
-      flip: false,
-    }
-    setDoc((current) => ({ ...current, videoWalls: [...current.videoWalls, wall] }))
-    setSelectedId(id)
-    flash('Pared agregada')
-  }
-
   function deleteSelection() {
     if (!selectedId) return
+    if (selectedWall) {
+      flash('Las paredes de pantallas y la puerta son estructura fija')
+      return
+    }
     setDoc((current) => ({
       ...current,
       zonas: current.zonas.filter((zone) => zone.id !== selectedId),
-      videoWalls: current.videoWalls.filter((wall) => wall.id !== selectedId),
     }))
     setSelectedId(null)
     flash('Objeto eliminado')
   }
 
   function duplicateSelection() {
-    if (selectedWall) {
-      const id = `wall-${Date.now()}-${sequence++}`
-      const geometry = wallGeom(selectedWall)
-      const endpoints = wallFrom(geometry.cx + 2500, geometry.cy + 1500, geometry.len, geometry.ang)
-      setDoc((current) => ({
-        ...current,
-        videoWalls: [
-          ...current.videoWalls,
-          { ...selectedWall, id, ...endpoints, nombre: `${selectedWall.nombre} (copia)` },
-        ],
-      }))
-      setSelectedId(id)
-      flash('Pared duplicada')
-      return
-    }
     if (!selectedZone) return
     const copy: Zone = {
       ...selectedZone,
@@ -283,24 +235,11 @@ export default function App() {
   }
 
   function rotateSelection(degrees: number) {
-    if (selectedWall) {
-      const geometry = wallGeom(selectedWall)
-      patchWall(selectedWall.id, {
-        ang: geometry.ang + (degrees * Math.PI) / 180,
-      })
-      return
-    }
     if (selectedZone) {
       patchZone(selectedZone.id, {
         rot: (selectedZone.rot || 0) + (degrees * Math.PI) / 180,
       })
     }
-  }
-
-  function resizeWall(delta: number) {
-    if (!selectedWall) return
-    const geometry = wallGeom(selectedWall)
-    patchWall(selectedWall.id, { len: Math.max(2000, geometry.len + delta) })
   }
 
   function resetPreset() {
@@ -346,11 +285,14 @@ export default function App() {
   })
 
   const selectedName = selectedWall ? selectedWall.nombre : selectedZone ? selectedZone.nombre : ''
-  const canEditSelection = Boolean(selectedWall || (selectedZone && selectedZone.kind !== 'nucleo'))
+  const canEditSelection = Boolean(selectedZone && selectedZone.kind !== 'nucleo')
 
   function setAppMode(nextMode: AppMode) {
     setMode(nextMode)
-    if (nextMode === 'editar3d') setView('3d')
+    if (nextMode === 'editar3d') {
+      setView('3d')
+      if (stage !== 'interior') enterInterior()
+    }
     if (nextMode === 'editar2d') {
       cancelTransition()
       setView('2d')
@@ -408,7 +350,7 @@ export default function App() {
           <button className="icon-action" onClick={toggleNight} aria-label="Alternar día y noche">
             {night ? 'Noche' : 'Día'}
           </button>
-          {view === '3d' && stage === 'interior' ? (
+          {view === '3d' ? (
             <button className={roof ? 'active' : ''} onClick={() => setRoof((value) => !value)}>
               Techo
             </button>
@@ -435,13 +377,15 @@ export default function App() {
 
       {showPanels ? (
         <aside className="side side--left">
-          {editing ? <Palette onAdd={addZone} onAddWall={addWall} /> : null}
+          {editing ? <Palette onAdd={addZone} /> : null}
           <Structure doc={doc} selectedId={selectedId} onSelect={setSelectedId} />
         </aside>
       ) : null}
 
       <main className="stage">
-        {view === '3d' ? <ExperienceNav ensure3D={() => setView('3d')} /> : null}
+        {view === '3d' ? (
+          <ExperienceNav ensure3D={() => setView('3d')} reframe={() => camApi.current.reset?.()} />
+        ) : null}
         {view === '2d' ? (
           <Plan2D
             key={`${doc.ancho}-${doc.alto}`}
@@ -473,7 +417,7 @@ export default function App() {
           </SceneErrorBoundary>
         )}
 
-        {view === '3d' && stage === 'interior' ? <CameraPanel camApi={camApi} /> : null}
+        {view === '3d' ? <CameraPanel camApi={camApi} /> : null}
         {view === '2d' || stage === 'interior' ? <InsightsLegend insight={insight} /> : null}
         {view === '3d' ? <TransitionStatus /> : null}
 
@@ -528,13 +472,6 @@ export default function App() {
                 </button>
               </>
             ) : null}
-            {selectedWall ? (
-              <>
-                <button onClick={() => resizeWall(-1000)}>−1 m</button>
-                <button onClick={() => resizeWall(1000)}>+1 m</button>
-                <button onClick={() => flipWall(selectedWall.id)}>Cambiar lado</button>
-              </>
-            ) : null}
             <button onClick={duplicateSelection}>Duplicar</button>
             <button className="danger" onClick={deleteSelection}>
               Borrar
@@ -547,14 +484,7 @@ export default function App() {
 
       {showPanels ? (
         <aside className="side side--right">
-          <Inspector
-            doc={doc}
-            selectedId={selectedId}
-            mode={mode}
-            onPatchZone={patchZone}
-            onPatchWall={patchWall}
-            onFlipWall={flipWall}
-          />
+          <Inspector doc={doc} selectedId={selectedId} mode={mode} onPatchZone={patchZone} />
         </aside>
       ) : null}
     </div>

@@ -18,6 +18,8 @@ Rige la regla **REFERENCE ONLY / NO ASSET COPIED**:
 
 La matriz de fuentes, fechas de acceso, restricciones e incertidumbres está en [`docs/PHASE_2_EXTERIOR.md`](./docs/PHASE_2_EXTERIOR.md). Como no entró ningún archivo externo al bundle, Fase 2 no agrega entradas al manifiesto de assets.
 
+La corrección de Fase 3 construye el texto `YPF` en runtime mediante trazos volumétricos simples e instanciados. No es un archivo, vector, tipografía corporativa ni asset oficial copiado, por lo que no agrega una entrada de manifiesto. Esta decisión técnica **no resuelve los derechos de marca**: el lettering permanece `demo-unverified`, no implica respaldo y requiere revisión de marca/licencia antes de cualquier uso que pretenda ser oficial. Si esa revisión no lo autoriza, debe sustituirse por un placeholder genérico.
+
 ## Principio de admisión
 
 Que una imagen, modelo o marca sea visible en Internet no concede permiso para copiarla, convertirla, entrenar/derivar un asset o redistribuirla. Todo asset nuevo necesita antes de entrar al bundle:

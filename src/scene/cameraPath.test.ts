@@ -40,7 +40,7 @@ describe('cinematic camera path adapter', () => {
     expect(route.waypoints[0]?.positionMm.x).toBe(originalX)
   })
 
-  it('keeps a continuous pose and tangent across renderer handoff', () => {
+  it('keeps a continuous pose and tangent while crossing the sliding door', () => {
     const route = getCinematicRoute('floor16', 'interior')
     expect(route).not.toBeNull()
     if (!route) return
@@ -51,8 +51,8 @@ describe('cinematic camera path adapter', () => {
     const atHandoff = sampleCameraRoute(waypoints, route.handoffProgress)
     const after = sampleCameraRoute(waypoints, route.handoffProgress + epsilon)
 
-    expect(atHandoff?.position.toArray()).toEqual([17, 2.4, 34.2])
-    expect(atHandoff?.lookAt.toArray()).toEqual([14, 1.2, 23])
+    expect(atHandoff?.position.toArray()).toEqual([38.92, 1.7, 12.08])
+    expect(atHandoff?.lookAt.toArray()).toEqual([43.728, 1.55, 7.272])
     expect(before?.position.distanceTo(after?.position ?? new THREE.Vector3())).toBeLessThan(0.2)
 
     const incoming = atHandoff?.position.clone().sub(before?.position ?? new THREE.Vector3())
@@ -93,7 +93,7 @@ describe('cinematic camera path adapter', () => {
       ),
     ).toBe(true)
     expect(samples[0]?.position.toArray()).toEqual([-119.4, 78.4, 240])
-    expect(samples.at(-1)?.position.toArray()).toEqual([13, 6, 50])
+    expect(samples.at(-1)?.position.toArray()).toEqual([35.95, 1.7, 15.05])
   })
 
   it('moves through internal waypoints without the per-segment stop from eased lerps', () => {

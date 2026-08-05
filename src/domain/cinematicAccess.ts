@@ -1,19 +1,17 @@
 import type { ActiveScene, StableSceneStage } from './experience'
 
 export type CinematicTransitionPhase = 'flight' | 'cover' | 'handoff' | 'reveal'
-/**
- * Camera geometry lives in one shared world frame. Scene ownership may change
- * at handoff, but position and look target never change coordinate systems.
- */
+
+/** Camera geometry lives in the same world as both the tower and floor 16. */
 export type CinematicCoordinateFrame = 'shared-world'
 
 export type CinematicRouteId =
-  | 'cinematic-exterior-floor16-v2'
-  | 'cinematic-floor16-exterior-v2'
-  | 'cinematic-floor16-interior-v2'
-  | 'cinematic-interior-floor16-v2'
-  | 'cinematic-interior-exterior-v2'
-  | 'cinematic-exterior-interior-v2'
+  | 'cinematic-exterior-floor16-v3'
+  | 'cinematic-floor16-exterior-v3'
+  | 'cinematic-floor16-interior-v3'
+  | 'cinematic-interior-floor16-v3'
+  | 'cinematic-interior-exterior-v3'
+  | 'cinematic-exterior-interior-v3'
 
 export interface CinematicPoint3Mm {
   readonly x: number
@@ -42,7 +40,7 @@ export interface CinematicRouteSpec {
   readonly toActiveScene: ActiveScene
   readonly durationMs: number
   readonly reducedMotionDurationMs: number
-  /** Normalized timeline point at which the destination render tree takes ownership. */
+  /** Timeline point at which the destination experience state takes ownership. */
   readonly handoffProgress: number
   readonly waypoints: readonly CinematicWaypointSpec[]
 }
@@ -50,7 +48,7 @@ export interface CinematicRouteSpec {
 export const CINEMATIC_PHASE_LABELS: Record<CinematicTransitionPhase, string> = {
   flight: 'Vuelo continuo al piso 16',
   cover: 'Aproximación a la fachada',
-  handoff: 'Continuidad entre escenas',
+  handoff: 'Continuidad espacial',
   reveal: 'Llegada a la escena',
 }
 
@@ -64,503 +62,194 @@ function deepFreeze<T>(value: T): Readonly<T> {
   return value
 }
 
+type SharedPose = Pick<CinematicWaypointSpec, 'positionMm' | 'lookAtMm' | 'fovDeg'>
+
+/**
+ * Offsets are integer millimeters from the shared tower/floor center. The last
+ * five poses follow the core's east door, so the camera crosses the opening
+ * instead of entering through a facade window.
+ */
+const POSES = {
+  exterior: {
+    positionMm: { x: -150_400, y: 220_000, elevation: 78_400 },
+    lookAtMm: { x: 0, y: 0, elevation: 17_000 },
+    fovDeg: 45,
+  },
+  orbit: {
+    positionMm: { x: -132_000, y: 190_000, elevation: 67_000 },
+    lookAtMm: { x: -5_000, y: 10_000, elevation: 26_000 },
+    fovDeg: 47,
+  },
+  descent: {
+    positionMm: { x: -105_000, y: 155_000, elevation: 42_000 },
+    lookAtMm: { x: -16_000, y: 20_000, elevation: 14_000 },
+    fovDeg: 48,
+  },
+  westFacade: {
+    positionMm: { x: -21_920, y: 21_920, elevation: 12_500 },
+    lookAtMm: { x: -4_243, y: 4_243, elevation: 2_000 },
+    fovDeg: 44,
+  },
+  coreAlignment: {
+    positionMm: { x: -707, y: 707, elevation: 2_250 },
+    lookAtMm: { x: 9_899, y: -9_899, elevation: 1_650 },
+    fovDeg: 49,
+  },
+  floor16: {
+    positionMm: { x: 4_950, y: -4_950, elevation: 1_700 },
+    lookAtMm: { x: 12_728, y: -12_728, elevation: 1_550 },
+    fovDeg: 52,
+  },
+  doorApproach: {
+    positionMm: { x: 5_657, y: -5_657, elevation: 1_700 },
+    lookAtMm: { x: 12_728, y: -12_728, elevation: 1_550 },
+    fovDeg: 52,
+  },
+  doorThreshold: {
+    positionMm: { x: 7_920, y: -7_920, elevation: 1_700 },
+    lookAtMm: { x: 12_728, y: -12_728, elevation: 1_550 },
+    fovDeg: 53,
+  },
+  room: {
+    positionMm: { x: 9_546, y: -9_546, elevation: 1_680 },
+    lookAtMm: { x: 13_789, y: -13_789, elevation: 1_550 },
+    fovDeg: 54,
+  },
+  interior: {
+    positionMm: { x: 10_253, y: -10_253, elevation: 1_650 },
+    lookAtMm: { x: 13_789, y: -13_789, elevation: 1_550 },
+    fovDeg: 55,
+  },
+} as const satisfies Record<string, SharedPose>
+
+function waypoint(
+  id: string,
+  scene: ActiveScene,
+  progress: number,
+  phase: CinematicTransitionPhase,
+  pose: SharedPose,
+): CinematicWaypointSpec {
+  return { id, frame: 'shared-world', scene, progress, phase, ...pose }
+}
+
 const ROUTES: readonly CinematicRouteSpec[] = [
   {
-    id: 'cinematic-exterior-floor16-v2',
+    id: 'cinematic-exterior-floor16-v3',
     status: 'demo-unverified',
     from: 'exterior',
     to: 'floor16',
     fromActiveScene: 'exterior',
     toActiveScene: 'exterior',
-    durationMs: 5_600,
+    durationMs: 6_800,
     reducedMotionDurationMs: 120,
-    handoffProgress: 0.86,
+    handoffProgress: 0.84,
     waypoints: [
-      {
-        id: 'v2-exterior-floor16-departure',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0,
-        phase: 'flight',
-        positionMm: { x: -150_400, y: 220_000, elevation: 78_400 },
-        lookAtMm: { x: 0, y: 0, elevation: 17_000 },
-        fovDeg: 45,
-      },
-      {
-        id: 'v2-exterior-floor16-orbit',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.24,
-        phase: 'flight',
-        positionMm: { x: -132_000, y: 190_000, elevation: 67_000 },
-        lookAtMm: { x: -5_000, y: 10_000, elevation: 26_000 },
-        fovDeg: 47,
-      },
-      {
-        id: 'v2-exterior-floor16-descent',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.48,
-        phase: 'flight',
-        positionMm: { x: -105_000, y: 155_000, elevation: 42_000 },
-        lookAtMm: { x: -16_000, y: 20_000, elevation: 14_000 },
-        fovDeg: 48,
-      },
-      {
-        id: 'v2-exterior-floor16-alignment',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.7,
-        phase: 'cover',
-        positionMm: { x: -62_000, y: 105_000, elevation: 26_000 },
-        lookAtMm: { x: -18_000, y: 36_000, elevation: 9_000 },
-        fovDeg: 44,
-      },
-      {
-        id: 'v2-exterior-floor16-near-facade',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.86,
-        phase: 'handoff',
-        positionMm: { x: -30_000, y: 50_000, elevation: 12_500 },
-        lookAtMm: { x: -15_000, y: 20_000, elevation: 3_200 },
-        fovDeg: 41,
-      },
-      {
-        id: 'v2-exterior-floor16-observation',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 1,
-        phase: 'reveal',
-        positionMm: { x: -18_000, y: 30_000, elevation: 6_000 },
-        lookAtMm: { x: -14_000, y: 14_500, elevation: 1_400 },
-        fovDeg: 42,
-      },
+      waypoint('v3-exterior-floor16-departure', 'exterior', 0, 'flight', POSES.exterior),
+      waypoint('v3-exterior-floor16-orbit', 'exterior', 0.23, 'flight', POSES.orbit),
+      waypoint('v3-exterior-floor16-descent', 'exterior', 0.44, 'flight', POSES.descent),
+      waypoint('v3-exterior-floor16-facade', 'exterior', 0.66, 'cover', POSES.westFacade),
+      waypoint('v3-exterior-floor16-alignment', 'exterior', 0.84, 'handoff', POSES.coreAlignment),
+      waypoint('v3-exterior-floor16-reveal', 'exterior', 1, 'reveal', POSES.floor16),
     ],
   },
   {
-    id: 'cinematic-floor16-exterior-v2',
+    id: 'cinematic-floor16-exterior-v3',
     status: 'demo-unverified',
     from: 'floor16',
     to: 'exterior',
     fromActiveScene: 'exterior',
     toActiveScene: 'exterior',
+    durationMs: 4_200,
+    reducedMotionDurationMs: 120,
+    handoffProgress: 0.42,
+    waypoints: [
+      waypoint('v3-floor16-exterior-departure', 'exterior', 0, 'flight', POSES.floor16),
+      waypoint('v3-floor16-exterior-alignment', 'exterior', 0.2, 'cover', POSES.coreAlignment),
+      waypoint('v3-floor16-exterior-facade', 'exterior', 0.42, 'handoff', POSES.westFacade),
+      waypoint('v3-floor16-exterior-descent', 'exterior', 0.62, 'reveal', POSES.descent),
+      waypoint('v3-floor16-exterior-orbit', 'exterior', 0.81, 'reveal', POSES.orbit),
+      waypoint('v3-floor16-exterior-reveal', 'exterior', 1, 'reveal', POSES.exterior),
+    ],
+  },
+  {
+    id: 'cinematic-floor16-interior-v3',
+    status: 'demo-unverified',
+    from: 'floor16',
+    to: 'interior',
+    fromActiveScene: 'exterior',
+    toActiveScene: 'interior',
     durationMs: 2_800,
     reducedMotionDurationMs: 120,
-    handoffProgress: 0.52,
+    handoffProgress: 0.5,
     waypoints: [
-      {
-        id: 'v2-floor16-exterior-departure',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0,
-        phase: 'flight',
-        positionMm: { x: -18_000, y: 30_000, elevation: 6_000 },
-        lookAtMm: { x: -14_000, y: 14_500, elevation: 1_400 },
-        fovDeg: 42,
-      },
-      {
-        id: 'v2-floor16-exterior-near-facade',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.14,
-        phase: 'flight',
-        positionMm: { x: -30_000, y: 50_000, elevation: 12_500 },
-        lookAtMm: { x: -15_000, y: 20_000, elevation: 3_200 },
-        fovDeg: 41,
-      },
-      {
-        id: 'v2-floor16-exterior-alignment',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.3,
-        phase: 'cover',
-        positionMm: { x: -62_000, y: 105_000, elevation: 26_000 },
-        lookAtMm: { x: -18_000, y: 36_000, elevation: 9_000 },
-        fovDeg: 44,
-      },
-      {
-        id: 'v2-floor16-exterior-handoff',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.52,
-        phase: 'handoff',
-        positionMm: { x: -105_000, y: 155_000, elevation: 42_000 },
-        lookAtMm: { x: -16_000, y: 20_000, elevation: 14_000 },
-        fovDeg: 48,
-      },
-      {
-        id: 'v2-floor16-exterior-orbit',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.76,
-        phase: 'reveal',
-        positionMm: { x: -132_000, y: 190_000, elevation: 67_000 },
-        lookAtMm: { x: -5_000, y: 10_000, elevation: 26_000 },
-        fovDeg: 47,
-      },
-      {
-        id: 'v2-floor16-exterior-reveal',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 1,
-        phase: 'reveal',
-        positionMm: { x: -150_400, y: 220_000, elevation: 78_400 },
-        lookAtMm: { x: 0, y: 0, elevation: 17_000 },
-        fovDeg: 45,
-      },
+      waypoint('v3-floor16-interior-departure', 'exterior', 0, 'flight', POSES.floor16),
+      waypoint('v3-floor16-interior-approach', 'exterior', 0.26, 'cover', POSES.doorApproach),
+      waypoint('v3-floor16-interior-threshold', 'interior', 0.5, 'handoff', POSES.doorThreshold),
+      waypoint('v3-floor16-interior-room', 'interior', 0.76, 'reveal', POSES.room),
+      waypoint('v3-floor16-interior-reveal', 'interior', 1, 'reveal', POSES.interior),
     ],
   },
   {
-    id: 'cinematic-floor16-interior-v2',
-    status: 'demo-unverified',
-    from: 'floor16',
-    to: 'interior',
-    fromActiveScene: 'exterior',
-    toActiveScene: 'interior',
-    durationMs: 3_400,
-    reducedMotionDurationMs: 120,
-    handoffProgress: 0.44,
-    waypoints: [
-      {
-        id: 'v2-floor16-interior-departure',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0,
-        phase: 'flight',
-        positionMm: { x: -18_000, y: 30_000, elevation: 6_000 },
-        lookAtMm: { x: -14_000, y: 14_500, elevation: 1_400 },
-        fovDeg: 42,
-      },
-      {
-        id: 'v2-floor16-interior-approach',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.25,
-        phase: 'cover',
-        positionMm: { x: -16_000, y: 18_000, elevation: 3_500 },
-        lookAtMm: { x: -10_000, y: 7_000, elevation: 1_400 },
-        fovDeg: 43,
-      },
-      {
-        id: 'v2-floor16-interior-handoff',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 0.44,
-        phase: 'handoff',
-        positionMm: { x: -14_000, y: 14_200, elevation: 2_400 },
-        lookAtMm: { x: -17_000, y: 3_000, elevation: 1_200 },
-        fovDeg: 44,
-      },
-      {
-        id: 'v2-floor16-interior-inside',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 0.7,
-        phase: 'reveal',
-        positionMm: { x: -15_000, y: 12_000, elevation: 1_900 },
-        lookAtMm: { x: -11_000, y: 2_000, elevation: 1_300 },
-        fovDeg: 48,
-      },
-      {
-        id: 'v2-floor16-interior-reveal',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 1,
-        phase: 'reveal',
-        positionMm: { x: -17_000, y: 12_000, elevation: 1_700 },
-        lookAtMm: { x: -4_000, y: 1_000, elevation: 1_450 },
-        fovDeg: 52,
-      },
-    ],
-  },
-  {
-    id: 'cinematic-interior-floor16-v2',
+    id: 'cinematic-interior-floor16-v3',
     status: 'demo-unverified',
     from: 'interior',
     to: 'floor16',
     fromActiveScene: 'interior',
     toActiveScene: 'exterior',
-    durationMs: 3_400,
+    durationMs: 3_200,
     reducedMotionDurationMs: 120,
-    handoffProgress: 0.56,
+    handoffProgress: 0.5,
     waypoints: [
-      {
-        id: 'v2-interior-floor16-departure',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 0,
-        phase: 'flight',
-        positionMm: { x: -17_000, y: 12_000, elevation: 1_700 },
-        lookAtMm: { x: -4_000, y: 1_000, elevation: 1_450 },
-        fovDeg: 52,
-      },
-      {
-        id: 'v2-interior-floor16-inside',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 0.3,
-        phase: 'cover',
-        positionMm: { x: -15_000, y: 12_000, elevation: 1_900 },
-        lookAtMm: { x: -11_000, y: 2_000, elevation: 1_300 },
-        fovDeg: 48,
-      },
-      {
-        id: 'v2-interior-floor16-handoff',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.56,
-        phase: 'handoff',
-        positionMm: { x: -14_000, y: 14_200, elevation: 2_400 },
-        lookAtMm: { x: -17_000, y: 3_000, elevation: 1_200 },
-        fovDeg: 44,
-      },
-      {
-        id: 'v2-interior-floor16-approach',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.75,
-        phase: 'reveal',
-        positionMm: { x: -16_000, y: 18_000, elevation: 3_500 },
-        lookAtMm: { x: -10_000, y: 7_000, elevation: 1_400 },
-        fovDeg: 43,
-      },
-      {
-        id: 'v2-interior-floor16-reveal',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 1,
-        phase: 'reveal',
-        positionMm: { x: -18_000, y: 30_000, elevation: 6_000 },
-        lookAtMm: { x: -14_000, y: 14_500, elevation: 1_400 },
-        fovDeg: 42,
-      },
+      waypoint('v3-interior-floor16-departure', 'interior', 0, 'flight', POSES.interior),
+      waypoint('v3-interior-floor16-room', 'interior', 0.24, 'cover', POSES.room),
+      waypoint('v3-interior-floor16-threshold', 'exterior', 0.5, 'handoff', POSES.doorThreshold),
+      waypoint('v3-interior-floor16-approach', 'exterior', 0.74, 'reveal', POSES.doorApproach),
+      waypoint('v3-interior-floor16-reveal', 'exterior', 1, 'reveal', POSES.floor16),
     ],
   },
   {
-    id: 'cinematic-interior-exterior-v2',
+    id: 'cinematic-interior-exterior-v3',
     status: 'demo-unverified',
     from: 'interior',
     to: 'exterior',
     fromActiveScene: 'interior',
     toActiveScene: 'exterior',
-    durationMs: 6_200,
+    durationMs: 7_200,
     reducedMotionDurationMs: 120,
-    handoffProgress: 0.15,
+    handoffProgress: 0.18,
     waypoints: [
-      {
-        id: 'v2-interior-exterior-departure',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 0,
-        phase: 'flight',
-        positionMm: { x: -17_000, y: 12_000, elevation: 1_700 },
-        lookAtMm: { x: -4_000, y: 1_000, elevation: 1_450 },
-        fovDeg: 52,
-      },
-      {
-        id: 'v2-interior-exterior-inside',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 0.07,
-        phase: 'cover',
-        positionMm: { x: -15_000, y: 12_000, elevation: 1_900 },
-        lookAtMm: { x: -11_000, y: 2_000, elevation: 1_300 },
-        fovDeg: 48,
-      },
-      {
-        id: 'v2-interior-exterior-handoff',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.15,
-        phase: 'handoff',
-        positionMm: { x: -14_000, y: 14_200, elevation: 2_400 },
-        lookAtMm: { x: -17_000, y: 3_000, elevation: 1_200 },
-        fovDeg: 44,
-      },
-      {
-        id: 'v2-interior-exterior-approach',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.21,
-        phase: 'reveal',
-        positionMm: { x: -16_000, y: 18_000, elevation: 3_500 },
-        lookAtMm: { x: -10_000, y: 7_000, elevation: 1_400 },
-        fovDeg: 43,
-      },
-      {
-        id: 'v2-interior-exterior-floor16',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.28,
-        phase: 'reveal',
-        positionMm: { x: -18_000, y: 30_000, elevation: 6_000 },
-        lookAtMm: { x: -14_000, y: 14_500, elevation: 1_400 },
-        fovDeg: 42,
-      },
-      {
-        id: 'v2-interior-exterior-near-facade',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.38,
-        phase: 'reveal',
-        positionMm: { x: -30_000, y: 50_000, elevation: 12_500 },
-        lookAtMm: { x: -15_000, y: 20_000, elevation: 3_200 },
-        fovDeg: 41,
-      },
-      {
-        id: 'v2-interior-exterior-alignment',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.52,
-        phase: 'reveal',
-        positionMm: { x: -62_000, y: 105_000, elevation: 26_000 },
-        lookAtMm: { x: -18_000, y: 36_000, elevation: 9_000 },
-        fovDeg: 44,
-      },
-      {
-        id: 'v2-interior-exterior-descent',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.67,
-        phase: 'reveal',
-        positionMm: { x: -105_000, y: 155_000, elevation: 42_000 },
-        lookAtMm: { x: -16_000, y: 20_000, elevation: 14_000 },
-        fovDeg: 48,
-      },
-      {
-        id: 'v2-interior-exterior-orbit',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.84,
-        phase: 'reveal',
-        positionMm: { x: -132_000, y: 190_000, elevation: 67_000 },
-        lookAtMm: { x: -5_000, y: 10_000, elevation: 26_000 },
-        fovDeg: 47,
-      },
-      {
-        id: 'v2-interior-exterior-reveal',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 1,
-        phase: 'reveal',
-        positionMm: { x: -150_400, y: 220_000, elevation: 78_400 },
-        lookAtMm: { x: 0, y: 0, elevation: 17_000 },
-        fovDeg: 45,
-      },
+      waypoint('v3-interior-exterior-departure', 'interior', 0, 'flight', POSES.interior),
+      waypoint('v3-interior-exterior-room', 'interior', 0.09, 'cover', POSES.room),
+      waypoint('v3-interior-exterior-threshold', 'exterior', 0.18, 'handoff', POSES.doorThreshold),
+      waypoint('v3-interior-exterior-floor16', 'exterior', 0.28, 'reveal', POSES.floor16),
+      waypoint('v3-interior-exterior-alignment', 'exterior', 0.42, 'reveal', POSES.coreAlignment),
+      waypoint('v3-interior-exterior-facade', 'exterior', 0.56, 'reveal', POSES.westFacade),
+      waypoint('v3-interior-exterior-descent', 'exterior', 0.7, 'reveal', POSES.descent),
+      waypoint('v3-interior-exterior-orbit', 'exterior', 0.85, 'reveal', POSES.orbit),
+      waypoint('v3-interior-exterior-reveal', 'exterior', 1, 'reveal', POSES.exterior),
     ],
   },
   {
-    id: 'cinematic-exterior-interior-v2',
+    id: 'cinematic-exterior-interior-v3',
     status: 'demo-unverified',
     from: 'exterior',
     to: 'interior',
     fromActiveScene: 'exterior',
     toActiveScene: 'interior',
-    durationMs: 8_400,
+    durationMs: 9_200,
     reducedMotionDurationMs: 120,
-    handoffProgress: 0.85,
+    handoffProgress: 0.82,
     waypoints: [
-      {
-        id: 'v2-exterior-interior-departure',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0,
-        phase: 'flight',
-        positionMm: { x: -150_400, y: 220_000, elevation: 78_400 },
-        lookAtMm: { x: 0, y: 0, elevation: 17_000 },
-        fovDeg: 45,
-      },
-      {
-        id: 'v2-exterior-interior-orbit',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.16,
-        phase: 'flight',
-        positionMm: { x: -132_000, y: 190_000, elevation: 67_000 },
-        lookAtMm: { x: -5_000, y: 10_000, elevation: 26_000 },
-        fovDeg: 47,
-      },
-      {
-        id: 'v2-exterior-interior-descent',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.33,
-        phase: 'flight',
-        positionMm: { x: -105_000, y: 155_000, elevation: 42_000 },
-        lookAtMm: { x: -16_000, y: 20_000, elevation: 14_000 },
-        fovDeg: 48,
-      },
-      {
-        id: 'v2-exterior-interior-alignment',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.48,
-        phase: 'flight',
-        positionMm: { x: -62_000, y: 105_000, elevation: 26_000 },
-        lookAtMm: { x: -18_000, y: 36_000, elevation: 9_000 },
-        fovDeg: 44,
-      },
-      {
-        id: 'v2-exterior-interior-near-facade',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.62,
-        phase: 'flight',
-        positionMm: { x: -30_000, y: 50_000, elevation: 12_500 },
-        lookAtMm: { x: -15_000, y: 20_000, elevation: 3_200 },
-        fovDeg: 41,
-      },
-      {
-        id: 'v2-exterior-interior-floor16',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.72,
-        phase: 'flight',
-        positionMm: { x: -18_000, y: 30_000, elevation: 6_000 },
-        lookAtMm: { x: -14_000, y: 14_500, elevation: 1_400 },
-        fovDeg: 42,
-      },
-      {
-        id: 'v2-exterior-interior-approach',
-        frame: 'shared-world',
-        scene: 'exterior',
-        progress: 0.79,
-        phase: 'cover',
-        positionMm: { x: -16_000, y: 18_000, elevation: 3_500 },
-        lookAtMm: { x: -10_000, y: 7_000, elevation: 1_400 },
-        fovDeg: 43,
-      },
-      {
-        id: 'v2-exterior-interior-handoff',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 0.85,
-        phase: 'handoff',
-        positionMm: { x: -14_000, y: 14_200, elevation: 2_400 },
-        lookAtMm: { x: -17_000, y: 3_000, elevation: 1_200 },
-        fovDeg: 44,
-      },
-      {
-        id: 'v2-exterior-interior-inside',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 0.93,
-        phase: 'reveal',
-        positionMm: { x: -15_000, y: 12_000, elevation: 1_900 },
-        lookAtMm: { x: -11_000, y: 2_000, elevation: 1_300 },
-        fovDeg: 48,
-      },
-      {
-        id: 'v2-exterior-interior-reveal',
-        frame: 'shared-world',
-        scene: 'interior',
-        progress: 1,
-        phase: 'reveal',
-        positionMm: { x: -17_000, y: 12_000, elevation: 1_700 },
-        lookAtMm: { x: -4_000, y: 1_000, elevation: 1_450 },
-        fovDeg: 52,
-      },
+      waypoint('v3-exterior-interior-departure', 'exterior', 0, 'flight', POSES.exterior),
+      waypoint('v3-exterior-interior-orbit', 'exterior', 0.15, 'flight', POSES.orbit),
+      waypoint('v3-exterior-interior-descent', 'exterior', 0.3, 'flight', POSES.descent),
+      waypoint('v3-exterior-interior-facade', 'exterior', 0.48, 'flight', POSES.westFacade),
+      waypoint('v3-exterior-interior-alignment', 'exterior', 0.63, 'flight', POSES.coreAlignment),
+      waypoint('v3-exterior-interior-floor16', 'exterior', 0.7, 'cover', POSES.floor16),
+      waypoint('v3-exterior-interior-approach', 'exterior', 0.76, 'cover', POSES.doorApproach),
+      waypoint('v3-exterior-interior-threshold', 'interior', 0.82, 'handoff', POSES.doorThreshold),
+      waypoint('v3-exterior-interior-room', 'interior', 0.91, 'reveal', POSES.room),
+      waypoint('v3-exterior-interior-reveal', 'interior', 1, 'reveal', POSES.interior),
     ],
   },
 ]
@@ -581,8 +270,9 @@ export function getCinematicRoute(
 
 function addPointErrors(errors: string[], point: CinematicPoint3Mm, path: string) {
   for (const key of ['x', 'y', 'elevation'] as const) {
-    if (!Number.isInteger(point[key]))
+    if (!Number.isInteger(point[key])) {
       errors.push(`${path}.${key} must be an integer millimeter value`)
+    }
   }
 }
 
@@ -631,9 +321,7 @@ export function validateCinematicRoute(route: CinematicRouteSpec): string[] {
       hasHandoffWaypoint = true
     }
 
-    if (waypoint.frame !== 'shared-world') {
-      errors.push(`${path}.frame must be shared-world`)
-    }
+    if (waypoint.frame !== 'shared-world') errors.push(`${path}.frame must be shared-world`)
     if (waypoint.progress < route.handoffProgress && waypoint.scene !== route.fromActiveScene) {
       errors.push(`${path}.scene must remain on fromActiveScene before handoff`)
     }

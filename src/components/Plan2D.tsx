@@ -133,8 +133,11 @@ export default function Plan2D({
       sel = w.id === selectedId
     return (
       <g
-        onPointerDown={(e) => grabAt(w.id, g.cx, g.cy, e)}
-        style={{ cursor: editing ? 'grab' : 'pointer' }}
+        onPointerDown={(event) => {
+          event.stopPropagation()
+          onSelect(w.id)
+        }}
+        style={{ cursor: 'pointer' }}
       >
         <line
           x1={w.x1}

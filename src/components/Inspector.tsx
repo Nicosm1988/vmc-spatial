@@ -5,20 +5,8 @@ interface Props {
   selectedId: string | null
   mode: AppMode
   onPatchZone: (id: string, patch: Partial<Zone>) => void
-  onPatchWall: (
-    id: string,
-    patch: { len?: number; ang?: number; pantallas?: number; filas?: number },
-  ) => void
-  onFlipWall: (id: string) => void
 }
-export default function Inspector({
-  doc,
-  selectedId,
-  mode,
-  onPatchZone,
-  onPatchWall,
-  onFlipWall,
-}: Props) {
+export default function Inspector({ doc, selectedId, mode, onPatchZone }: Props) {
   const z = doc.zonas.find((x) => x.id === selectedId) || null
   const wall = doc.videoWalls.find((w) => w.id === selectedId) || null
   const editable = mode !== 'explorar'
@@ -27,75 +15,33 @@ export default function Inspector({
     return Number.isFinite(n) ? n : 0
   }
   if (wall) {
-    const g = wallGeom(wall),
-      dis = !editable
+    const g = wallGeom(wall)
     return (
       <div>
         <h3>Inspector · {wall.nombre}</h3>
-        {!editable && (
-          <div className="hint" style={{ marginBottom: 10 }}>
-            Pasá a <b>Editar</b>.
-          </div>
-        )}
-        <button className="wide" disabled={dis} onClick={() => onFlipWall(wall.id)}>
-          🔃 Cambiar lado de las pantallas
-        </button>
-        <div className="field" style={{ marginTop: 12 }}>
-          <label>📏 Largo (mm) · {Math.round(g.len)}</label>
-          <input
-            className="slider"
-            type="range"
-            min={2000}
-            max={20000}
-            step={100}
-            value={Math.round(g.len)}
-            disabled={dis}
-            onChange={(e) => onPatchWall(wall.id, { len: num(e.target.value) })}
-          />
+        <div className="hint" style={{ marginBottom: 12 }}>
+          Estructura fija del núcleo. Su posición, orientación y cantidad de pantallas están
+          bloqueadas para conservar la puerta y el montaje.
         </div>
         <div className="row2">
           <div className="field">
             <label>Largo</label>
-            <input
-              type="number"
-              value={Math.round(g.len)}
-              disabled={dis}
-              onChange={(e) => onPatchWall(wall.id, { len: num(e.target.value) })}
-            />
+            <output>{Math.round(g.len)} mm</output>
           </div>
           <div className="field">
-            <label>Rot (°)</label>
-            <input
-              type="number"
-              value={Math.round((g.ang * 180) / Math.PI)}
-              disabled={dis}
-              onChange={(e) => onPatchWall(wall.id, { ang: (num(e.target.value) * Math.PI) / 180 })}
-            />
+            <label>Orientación</label>
+            <output>{Math.round((g.ang * 180) / Math.PI)}°</output>
           </div>
         </div>
-        <div className="field">
-          <label>Pantallas · {wall.pantallas}</label>
-          <input
-            className="slider"
-            type="range"
-            min={2}
-            max={60}
-            value={wall.pantallas}
-            disabled={dis}
-            onChange={(e) => onPatchWall(wall.id, { pantallas: num(e.target.value) })}
-          />
-        </div>
-        <div className="field">
-          <label>Filas · {wall.filas || 2}</label>
-          <input
-            className="slider"
-            type="range"
-            min={1}
-            max={5}
-            value={wall.filas || 2}
-            disabled={dis}
-            onChange={(e) => onPatchWall(wall.id, { filas: num(e.target.value) })}
-          />
+        <div className="row2">
+          <div className="field">
+            <label>Pantallas</label>
+            <output>{wall.pantallas}</output>
+          </div>
+          <div className="field">
+            <label>Filas</label>
+            <output>{wall.filas || 2}</output>
+          </div>
         </div>
       </div>
     )
@@ -105,7 +51,7 @@ export default function Inspector({
       <div>
         <h3>Inspector</h3>
         <div className="empty">
-          Seleccioná un objeto o pared. En <b>Editar</b> lo arrastrás, rotás y redimensionás.
+          Seleccioná un objeto para editarlo o una pared estructural para consultar su montaje.
         </div>
       </div>
     )

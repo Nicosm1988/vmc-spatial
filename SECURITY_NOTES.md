@@ -111,6 +111,7 @@ No saltar estados por semejanza visual. El registro en `docs/ASSUMPTIONS_AND_FAC
 - [ ] no hay secretos en bundle, historial, `.env`, assets o sourcemaps;
 - [ ] geometría y datos visibles tienen clasificación y aprobación de publicación;
 - [ ] la marca “DEMO / NO VERIFICADO” permanece donde corresponda;
+- [ ] el lettering procedural `YPF` cuenta con revisión de marca para el alcance publicado o fue reemplazado por un placeholder genérico;
 - [ ] manifest/licencias de assets están completos;
 - [ ] fotos, EXIF, planos y artefactos restringidos están ausentes;
 - [ ] imports inválidos y almacenamiento corrupto se rechazan de forma segura;

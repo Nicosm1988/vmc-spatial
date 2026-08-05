@@ -128,6 +128,8 @@ Todos los tipos usan `cx/cy` como centro. Los campos de tamaño dependen de `kin
 
 Un videowall se define por sus extremos `(x1,y1)` y `(x2,y2)` en mm. Su centro, longitud y ángulo se derivan; al editar deben redondearse nuevamente los extremos a mm enteros.
 
+El contrato conserva esos campos por compatibilidad. En la experiencia de Fase 3, las cuatro paredes canónicas del núcleo se normalizan al preset y quedan protegidas en la UI: esto garantiza el cierre entre aristas, la puerta sobre la quinta arista y el inventario estable de 98 pantallas. La edición paramétrica de paredes queda diferida hasta que un único modelo gobierne también aberturas y estructura.
+
 - `pantallas`: cantidad total entera positiva.
 - `filas`: cantidad de filas entera positiva; las columnas se derivan para render.
 - `flip`: elige el lado visible. Si falta en un documento histórico, puede normalizarse una vez y persistirse de forma explícita.
@@ -151,7 +153,7 @@ Una importación inválida falla de forma atómica: no mezcla datos parciales co
 
 ## Persistencia y round-trip
 
-El almacenamiento de esta etapa es local al perfil del navegador y no está cifrado. La exportación produce JSON legible; una importación válida debe preservar todos los campos vigentes al exportarse de nuevo.
+El almacenamiento de esta etapa es local al perfil del navegador y no está cifrado. La exportación produce JSON legible; una importación válida preserva sus campos vigentes salvo las normalizaciones estructurales explícitas descritas abajo.
 
 Reglas:
 
@@ -160,6 +162,8 @@ Reglas:
 3. usar debounce para autosave, sin convertir una falla de cuota en caída de la escena;
 4. resetear elimina el documento local y restaura un preset validado;
 5. no almacenar fotos, secretos ni evidencia restringida en el documento.
+
+Excepción estructural intencional: este producto fija las cuatro paredes de pantallas de un documento identificado como VMC Piso 16 para conservar sus `98` pantallas y reservar la quinta arista para la puerta. Al cargar o importar ese documento, las cuatro paredes se reemplazan por los IDs, extremos derivados del núcleo, cantidades, filas y orientación del preset canónico; sólo se conserva un nombre existente con el mismo ID. Si su núcleo no tiene cinco vértices también se restaura el núcleo canónico. La siguiente exportación refleja esa versión normalizada. Documentos ajenos al VMC Piso 16, las zonas editables y los demás campos continúan sujetos al round-trip habitual.
 
 Dexie/IndexedDB está planificado para una fase posterior. Su primera versión debe migrar el documento local vigente o conservar un fallback explícito.
 
@@ -184,6 +188,8 @@ Dexie/IndexedDB está planificado para una fase posterior. Su primera versión d
 - visibilidad/capa y relaciones padre-hijo.
 
 Tampoco representa paredes paramétricas con aberturas, puertas, ventanas, luminarias o assets por manifiesto. Estas carencias son deuda conocida, no campos implícitos.
+
+La entrada DEMO de dos hojas y la pantalla hero restauradas en Fase 3 son geometría derivada del renderer y no se serializan como entidades de `vmc-spatial/6`. La oficina principal de punta sí usa una `Zone` de tipo `oficina`. Ninguno de esos elementos cambia el schema ni confirma una distribución física real.
 
 ## Evolución prevista, no implementada
 

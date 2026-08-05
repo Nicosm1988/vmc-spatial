@@ -1,9 +1,11 @@
 import type { VmcDocument } from '../types'
 import { parseVmcDocument, safeParseVmcDocument } from '../domain/documentSchema'
-const KEY = 'vmc-spatial:doc:v14'
+const KEY = 'vmc-spatial:doc:v15'
+const LEGACY_KEYS = ['vmc-spatial:doc:v14'] as const
 export function loadDoc(): VmcDocument | null {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw =
+      localStorage.getItem(KEY) ?? LEGACY_KEYS.map((key) => localStorage.getItem(key)).find(Boolean)
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
     const result = safeParseVmcDocument(parsed)
@@ -20,6 +22,7 @@ export function saveDoc(doc: VmcDocument): void {
 export function clearDoc(): void {
   try {
     localStorage.removeItem(KEY)
+    LEGACY_KEYS.forEach((key) => localStorage.removeItem(key))
   } catch {}
 }
 export function exportJson(doc: VmcDocument): void {

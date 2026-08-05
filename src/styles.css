@@ -473,6 +473,28 @@ input[type='number'] {
   font-size: 11px;
 }
 
+.experience-nav--persistent {
+  border-radius: 16px;
+}
+
+.experience-nav--persistent .experience-nav__actions {
+  display: flex;
+}
+
+.experience-nav--persistent .experience-nav__actions button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.experience-nav--persistent .experience-nav__actions button span {
+  margin: 0;
+}
+
 .experience-nav__exit {
   min-height: 28px;
   padding: 4px 10px;
@@ -846,6 +868,13 @@ button.wide {
   font-size: 10px;
 }
 
+.cp-help {
+  margin: 7px 2px 9px;
+  color: var(--text-faint);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
 .cp-wide {
   width: 100%;
   min-height: 34px;
@@ -1205,6 +1234,10 @@ button.wide {
   .experience-nav--compact {
     right: auto;
     max-width: calc(100% - 28px);
+  }
+
+  .experience-nav--persistent .experience-nav__status {
+    display: none;
   }
 
   .campanel {

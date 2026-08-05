@@ -12,6 +12,7 @@ function collectIds(spec: ExteriorDemoSpec): string[] {
     ...spec.massing.map((volume) => volume.id),
     spec.garden.id,
     ...spec.garden.modules.map((module) => module.id),
+    spec.signage.id,
     spec.site.id,
     ...spec.site.elements.map((element) => element.id),
   ]
@@ -50,6 +51,12 @@ describe('exterior demo specification', () => {
     ])
     expect(EXTERIOR_DEMO_SPEC.garden.placement).toBe('near-top')
     expect(EXTERIOR_DEMO_SPEC.garden.modules).toHaveLength(6)
+    expect(EXTERIOR_DEMO_SPEC.signage).toMatchObject({
+      label: 'YPF',
+      widthMm: 16_500,
+      heightMm: 5_200,
+      status: 'demo-unverified',
+    })
     expect(EXTERIOR_DEMO_SPEC.site.classification).toBe('conceptual')
     expect(EXTERIOR_DEMO_SPEC.site.elements.map((element) => element.kind)).toEqual([
       'ground',

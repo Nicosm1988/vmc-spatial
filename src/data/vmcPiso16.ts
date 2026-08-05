@@ -17,6 +17,22 @@ const CORE = [
   { x: 42500, y: 22069 },
   { x: 30500, y: 25700 },
 ]
+
+export const VIDEO_WALL_CORE_EDGE = {
+  'vw-no': 0,
+  'vw-ne': 1,
+  'vw-se': 3,
+  'vw-so': 4,
+} as const
+
+export const ENTRY_CORE_EDGE_INDEX = 2
+
+function coreEdge(index: number) {
+  const start = CORE[index]!
+  const end = CORE[(index + 1) % CORE.length]!
+  return { x1: start.x, y1: start.y, x2: end.x, y2: end.y }
+}
+
 export const VMC_PISO_16: VmcDocument = {
   schema: 'vmc-spatial/6',
   nombre: 'VMC · Piso 16',
@@ -30,7 +46,7 @@ export const VMC_PISO_16: VmcDocument = {
   zonas: [
     {
       id: 'core',
-      nombre: 'Núcleo',
+      nombre: 'Núcleo · acceso de dos hojas',
       kind: 'nucleo',
       cx: 33000,
       cy: 20000,
@@ -38,7 +54,22 @@ export const VMC_PISO_16: VmcDocument = {
       puestos: 0,
       ocupacion: 100,
       datalizacion: 95,
-      nota: 'Núcleo.',
+      nota: 'Núcleo central. El borde Este contiene la puerta corrediza demostrativa.',
+    },
+    {
+      id: 'of-central',
+      nombre: 'Oficina principal · punta Este',
+      kind: 'oficina',
+      cx: 55000,
+      cy: 20000,
+      rot: 0,
+      w: 5600,
+      h: 5200,
+      color: '#2a4a86',
+      puestos: 8,
+      ocupacion: 60,
+      datalizacion: 70,
+      nota: 'Oficina principal demostrativa con mesa larga de reunión.',
     },
     {
       id: 'cl1',
@@ -287,36 +318,6 @@ export const VMC_PISO_16: VmcDocument = {
       nota: 'Mesa.',
     },
     {
-      id: 'com-e1',
-      nombre: 'Comedor e1',
-      kind: 'comedor',
-      cx: 57038,
-      cy: 17969,
-      w: 3600,
-      h: 1600,
-      rot: 0.3491,
-      color: '#8a5a2b',
-      puestos: 0,
-      ocupacion: 45,
-      datalizacion: 20,
-      nota: 'Comedor.',
-    },
-    {
-      id: 'com-e2',
-      nombre: 'Comedor e2',
-      kind: 'comedor',
-      cx: 58113,
-      cy: 22837,
-      w: 3600,
-      h: 1600,
-      rot: -0.3491,
-      color: '#8a5a2b',
-      puestos: 0,
-      ocupacion: 45,
-      datalizacion: 20,
-      nota: 'Comedor.',
-    },
-    {
       id: 'com-w1',
       nombre: 'Comedor w1',
       kind: 'comedor',
@@ -336,40 +337,28 @@ export const VMC_PISO_16: VmcDocument = {
     {
       id: 'vw-ne',
       nombre: 'Pared Frente-Norte',
-      x1: 30860,
-      y1: 14409,
-      x2: 42140,
-      y2: 17822,
+      ...coreEdge(VIDEO_WALL_CORE_EDGE['vw-ne']),
       pantallas: 20,
       filas: 2,
     },
     {
       id: 'vw-se',
       nombre: 'Pared Frente-Sur',
-      x1: 42140,
-      y1: 22178,
-      x2: 30860,
-      y2: 25591,
+      ...coreEdge(VIDEO_WALL_CORE_EDGE['vw-se']),
       pantallas: 30,
       filas: 3,
     },
     {
       id: 'vw-no',
       nombre: 'Pared Atrás-Norte',
-      x1: 24680,
-      y1: 19829,
-      x2: 30320,
-      y2: 14471,
+      ...coreEdge(VIDEO_WALL_CORE_EDGE['vw-no']),
       pantallas: 24,
       filas: 2,
     },
     {
       id: 'vw-so',
       nombre: 'Pared Atrás-Sur',
-      x1: 30320,
-      y1: 25529,
-      x2: 24680,
-      y2: 20171,
+      ...coreEdge(VIDEO_WALL_CORE_EDGE['vw-so']),
       pantallas: 24,
       filas: 2,
     },

@@ -1,3 +1,4 @@
+import * as THREE from 'three'
 import { mmToMeters } from '../../domain/units'
 import { heat, wallGeom } from '../../lib/geometry'
 import { INSIGHTS } from '../../lib/insights'
@@ -23,9 +24,12 @@ export interface PerformanceInteriorLayout {
   windowShadeCassettes: PerformanceInstance[]
   videoWallShells: PerformanceInstance[]
   videoWallTrims: PerformanceInstance[]
-  videoWallCabinets: PerformanceInstance[]
   videoWallBezels: PerformanceInstance[]
   videoWallScreens: PerformanceInstance[]
+  entryDoorFrames: PerformanceInstance[]
+  entryDoorLeaves: PerformanceInstance[]
+  heroScreenFrames: PerformanceInstance[]
+  heroScreens: PerformanceInstance[]
   tableTops: PerformanceInstance[]
   tableBases: PerformanceInstance[]
   tableLegs: PerformanceInstance[]
@@ -49,13 +53,14 @@ export interface PerformanceInteriorLayout {
 
 export const PRESENTATION_ENVELOPE_ID = 'demo-presentation-envelope'
 export const PRESENTATION_CEILING_ID = 'demo-technical-ceiling'
+export const PRESENTATION_ENTRY_ID = 'demo-core-entry'
+export const PRESENTATION_HERO_SCREEN_ID = 'demo-entry-hero-screen'
 
 const WINDOW_SEGMENTS = 30
 const DESK_WIDTH = 1.6
 const DESK_DEPTH = 0.86
 const DESK_SPINE = 0.06
 const DESK_ROW_Z = DESK_DEPTH / 2 + DESK_SPINE / 2
-const MONITOR_RADIUS = 0.9
 
 const COLORS = {
   accent: '#2b6cb0',
@@ -78,7 +83,6 @@ const COLORS = {
   table: '#f2f2ee',
   tableBase: '#e6e6e2',
   videoBezel: '#03050a',
-  videoCabinet: '#e3e3df',
   videoScreen: '#ffffff',
   videoShell: '#d8cdbf',
   videoTrim: '#c3b6a4',
@@ -94,9 +98,12 @@ function emptyLayout(): PerformanceInteriorLayout {
     windowShadeCassettes: [],
     videoWallShells: [],
     videoWallTrims: [],
-    videoWallCabinets: [],
     videoWallBezels: [],
     videoWallScreens: [],
+    entryDoorFrames: [],
+    entryDoorLeaves: [],
+    heroScreenFrames: [],
+    heroScreens: [],
     tableTops: [],
     tableBases: [],
     tableLegs: [],
@@ -205,18 +212,28 @@ function addAtNestedLocal(
   rotationZ = 0,
 ) {
   const [offsetX, offsetZ] = worldFromLocal(0, 0, groupRotationY, partPosition[0], partPosition[2])
-  addAtZoneLocal(
-    target,
-    zone,
-    role,
-    index,
+  const [x, z] = worldFromLocal(
+    mmToMeters(zone.cx),
+    mmToMeters(zone.cy),
     zoneRotationY,
-    [groupX + offsetX, partPosition[1], groupZ + offsetZ],
-    scale,
-    color,
-    groupRotationY + partRotationY,
-    rotationX,
-    rotationZ,
+    groupX + offsetX,
+    groupZ + offsetZ,
+  )
+  const parent = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(0, zoneRotationY + groupRotationY + partRotationY, 0),
+  )
+  const local = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotationX, 0, rotationZ))
+  const composed = new THREE.Euler().setFromQuaternion(parent.multiply(local), 'XYZ')
+  target.push(
+    instance(
+      zone.id,
+      role,
+      index,
+      [x, partPosition[1], z],
+      [composed.x, composed.y, composed.z],
+      scale,
+      color,
+    ),
   )
 }
 
@@ -297,7 +314,7 @@ function addEnvelope(layout: PerformanceInteriorLayout, doc: VmcDocument) {
       ),
     )
 
-    const shadeHeight = [0.52, 0.86, 1.18, 0.68][segmentIndex % 4]!
+    const shadeHeight = [0.18, 1.46, 2.24, 0.72, 1.78, 0.34][segmentIndex % 6]!
     const [shadeX, shadeZ] = worldFromLocal(centerX, centerZ, rotationY, 0, 0.075)
     layout.windowShades.push(
       instance(
@@ -324,30 +341,220 @@ function addEnvelope(layout: PerformanceInteriorLayout, doc: VmcDocument) {
   })
 }
 
+interface CoreEdge {
+  index: number
+  centerX: number
+  centerZ: number
+  length: number
+  rotationY: number
+}
+
+export interface ResolvedVideoWallStructure {
+  readonly ownerId: string
+  readonly centerX: number
+  readonly centerZ: number
+  readonly length: number
+  readonly rotationY: number
+}
+
+export interface ResolvedVideoWallArchitecture {
+  readonly walls: readonly ResolvedVideoWallStructure[]
+  readonly entry: ResolvedVideoWallStructure | null
+}
+
+function coreEdges(doc: VmcDocument): CoreEdge[] {
+  return doc.core.map((point, index) => {
+    const next = doc.core[(index + 1) % doc.core.length]!
+    const x1 = mmToMeters(point.x)
+    const z1 = mmToMeters(point.y)
+    const x2 = mmToMeters(next.x)
+    const z2 = mmToMeters(next.y)
+    return {
+      index,
+      centerX: (x1 + x2) / 2,
+      centerZ: (z1 + z2) / 2,
+      length: Math.hypot(x2 - x1, z2 - z1),
+      rotationY: Math.atan2(-(z2 - z1), x2 - x1),
+    }
+  })
+}
+
+function faceAwayFromCore(edge: CoreEdge, coreX: number, coreZ: number) {
+  let rotationY = edge.rotationY
+  const normalX = Math.sin(rotationY)
+  const normalZ = Math.cos(rotationY)
+  if (normalX * (edge.centerX - coreX) + normalZ * (edge.centerZ - coreZ) < 0) {
+    rotationY += Math.PI
+  }
+  return rotationY
+}
+
+/**
+ * Consumes the four authored videowall segments without replacing their
+ * geometry and reserves the nearest unused core edge for the entrance. The
+ * canonical preset already stores exact core-edge endpoints, so document,
+ * plan, inspector, presentation and editor all expose the same structure.
+ */
+export function resolveVideoWallArchitecture(doc: VmcDocument): ResolvedVideoWallArchitecture {
+  const coreX = mmToMeters(doc.core.reduce((sum, point) => sum + point.x, 0) / doc.core.length)
+  const coreZ = mmToMeters(doc.core.reduce((sum, point) => sum + point.y, 0) / doc.core.length)
+  const edges = coreEdges(doc)
+  const usedEdges = new Set<number>()
+  const walls = doc.videoWalls.flatMap((wall) => {
+    const geometry = wallGeom(wall)
+    const wallCenterX = mmToMeters(geometry.cx)
+    const wallCenterZ = mmToMeters(geometry.cy)
+    const edge = edges
+      .filter((candidate) => !usedEdges.has(candidate.index))
+      .sort(
+        (left, right) =>
+          Math.hypot(left.centerX - wallCenterX, left.centerZ - wallCenterZ) -
+          Math.hypot(right.centerX - wallCenterX, right.centerZ - wallCenterZ),
+      )[0]
+    if (!edge) return []
+    usedEdges.add(edge.index)
+
+    const authoredEdge: CoreEdge = {
+      index: edge.index,
+      centerX: wallCenterX,
+      centerZ: wallCenterZ,
+      length: mmToMeters(geometry.len),
+      rotationY: -geometry.ang,
+    }
+    return [
+      {
+        ownerId: wall.id,
+        centerX: authoredEdge.centerX,
+        centerZ: authoredEdge.centerZ,
+        length: authoredEdge.length,
+        // Legacy documents mark the corrected/outward side as flip=true.
+        // Undefined preset values also use the safe physical default.
+        rotationY:
+          faceAwayFromCore(authoredEdge, coreX, coreZ) + (wall.flip === false ? Math.PI : 0),
+      },
+    ]
+  })
+  const entryEdge = edges.find((edge) => !usedEdges.has(edge.index))
+
+  return {
+    walls,
+    entry: entryEdge
+      ? {
+          ownerId: PRESENTATION_ENTRY_ID,
+          centerX: entryEdge.centerX,
+          centerZ: entryEdge.centerZ,
+          length: entryEdge.length,
+          rotationY: faceAwayFromCore(entryEdge, coreX, coreZ),
+        }
+      : null,
+  }
+}
+
+function addEntryArchitecture(
+  layout: PerformanceInteriorLayout,
+  doorEdge: ResolvedVideoWallStructure,
+) {
+  const rotationY = doorEdge.rotationY
+  const wallHeight = 3.1
+  const doorHeight = 2.48
+  const openingWidth = Math.min(2.2, doorEdge.length - 0.6)
+  const sideReturnWidth = (doorEdge.length - openingWidth) / 2
+  const leafWidth = openingWidth / 2
+
+  const addFrame = (role: string, index: number, localX: number, y: number, scale: Vec3) => {
+    const [x, z] = worldFromLocal(doorEdge.centerX, doorEdge.centerZ, rotationY, localX, 0)
+    layout.entryDoorFrames.push(
+      instance(
+        PRESENTATION_ENTRY_ID,
+        role,
+        index,
+        [x, y, z],
+        [0, rotationY, 0],
+        scale,
+        COLORS.videoShell,
+      ),
+    )
+  }
+
+  addFrame('door-header', 0, 0, doorHeight + (wallHeight - doorHeight) / 2, [
+    doorEdge.length,
+    wallHeight - doorHeight,
+    0.18,
+  ])
+  addFrame('door-side-return', 0, -(openingWidth + sideReturnWidth) / 2, doorHeight / 2, [
+    sideReturnWidth,
+    doorHeight,
+    0.18,
+  ])
+  addFrame('door-side-return', 1, (openingWidth + sideReturnWidth) / 2, doorHeight / 2, [
+    sideReturnWidth,
+    doorHeight,
+    0.18,
+  ])
+  addFrame('door-track', 0, 0, 0.035, [openingWidth, 0.035, 0.15])
+
+  ;[-1, 1].forEach((side, index) => {
+    const localX = side * (leafWidth / 2)
+    const [x, z] = worldFromLocal(doorEdge.centerX, doorEdge.centerZ, rotationY, localX, 0.035)
+    layout.entryDoorLeaves.push(
+      instance(
+        PRESENTATION_ENTRY_ID,
+        'sliding-door-leaf',
+        index,
+        [x, doorHeight / 2, z],
+        [0, rotationY, 0],
+        [leafWidth - 0.025, doorHeight - 0.06, 0.055],
+        '#9fc9d8',
+      ),
+    )
+  })
+
+  const outwardX = Math.sin(rotationY)
+  const outwardZ = Math.cos(rotationY)
+  const heroX = doorEdge.centerX + outwardX * 8
+  const heroZ = doorEdge.centerZ + outwardZ * 8
+  layout.heroScreenFrames.push(
+    instance(
+      PRESENTATION_HERO_SCREEN_ID,
+      'hero-screen-frame',
+      0,
+      [heroX, 1.42, heroZ],
+      [0, rotationY + Math.PI, 0],
+      [4.34, 2.54, 0.14],
+      COLORS.monitorFrame,
+    ),
+  )
+  layout.heroScreens.push(
+    instance(
+      PRESENTATION_HERO_SCREEN_ID,
+      'hero-screen',
+      0,
+      [heroX - outwardX * 0.078, 1.42, heroZ - outwardZ * 0.078],
+      [0, rotationY + Math.PI, 0],
+      [4.16, 2.34, 0.018],
+      COLORS.videoScreen,
+    ),
+  )
+}
+
 function addVideoWalls(layout: PerformanceInteriorLayout, doc: VmcDocument) {
-  const coreX = doc.core.reduce((sum, point) => sum + point.x, 0) / doc.core.length
-  const coreY = doc.core.reduce((sum, point) => sum + point.y, 0) / doc.core.length
+  const architecture = resolveVideoWallArchitecture(doc)
+  const wallStructures = new Map(
+    architecture.walls.map((structure) => [structure.ownerId, structure]),
+  )
 
   doc.videoWalls.forEach((wall) => {
-    const geometry = wallGeom(wall)
-    const length = mmToMeters(geometry.len)
-    let rotationY = Math.atan2(-(wall.y2 - wall.y1), wall.x2 - wall.x1)
-    let flip = wall.flip
-    if (flip === undefined) {
-      const normalX = Math.sin(rotationY)
-      const normalZ = Math.cos(rotationY)
-      flip = normalX * (geometry.cx - coreX) + normalZ * (geometry.cy - coreY) < 0
-    }
-    if (flip) rotationY += Math.PI
+    const edge = wallStructures.get(wall.id)
+    if (!edge) return
 
-    const centerX = mmToMeters(geometry.cx)
-    const centerZ = mmToMeters(geometry.cy)
+    const length = edge.length
+    const rotationY = edge.rotationY
     layout.videoWallShells.push(
       instance(
         wall.id,
         'video-shell',
         0,
-        [centerX, 1.55, centerZ],
+        [edge.centerX, 1.55, edge.centerZ],
         [0, rotationY, 0],
         [length, 3.1, 0.14],
         COLORS.videoShell,
@@ -358,7 +565,7 @@ function addVideoWalls(layout: PerformanceInteriorLayout, doc: VmcDocument) {
       { y: 0.08, role: 'video-trim-bottom' },
       { y: 3.02, role: 'video-trim-top' },
     ].forEach((trim, trimIndex) => {
-      const [x, z] = worldFromLocal(centerX, centerZ, rotationY, 0, 0.075)
+      const [x, z] = worldFromLocal(edge.centerX, edge.centerZ, rotationY, 0, 0.075)
       layout.videoWallTrims.push(
         instance(
           wall.id,
@@ -372,28 +579,17 @@ function addVideoWalls(layout: PerformanceInteriorLayout, doc: VmcDocument) {
       )
     })
 
-    const [cabinetX, cabinetZ] = worldFromLocal(centerX, centerZ, rotationY, 0, 0.26)
-    layout.videoWallCabinets.push(
-      instance(
-        wall.id,
-        'video-cabinet',
-        0,
-        [cabinetX, 0.55, cabinetZ],
-        [0, rotationY, 0],
-        [Math.max(0.5, length - 0.34), 0.82, 0.48],
-        COLORS.videoCabinet,
-      ),
-    )
-
     const wallHeight = 3.1
     const rows = Math.max(1, wall.filas ?? 2)
     const columns = Math.max(1, Math.ceil(wall.pantallas / rows))
     const gap = 0.03
-    const bandBottom = 1.05
+    const bandBottom = 0.74
     const bandTop = wallHeight - 0.2
     const availableHeight = bandTop - bandBottom
-    const screenHeight = Math.min(0.86, (availableHeight - (rows - 1) * gap) / rows)
-    const screenWidth = (length - 0.4) / columns - gap
+    const maximumWidth = (length - 0.4 - (columns - 1) * gap) / columns
+    const maximumHeight = (availableHeight - (rows - 1) * gap) / rows
+    const screenWidth = Math.min(maximumWidth, (maximumHeight * 16) / 9)
+    const screenHeight = (screenWidth * 9) / 16
     const yBottom =
       bandBottom +
       (availableHeight - (rows * screenHeight + (rows - 1) * gap)) / 2 +
@@ -404,8 +600,14 @@ function addVideoWalls(layout: PerformanceInteriorLayout, doc: VmcDocument) {
       const column = screenIndex % columns
       const localX = -((columns - 1) * (screenWidth + gap)) / 2 + column * (screenWidth + gap)
       const localY = yBottom + row * (screenHeight + gap)
-      const [bezelX, bezelZ] = worldFromLocal(centerX, centerZ, rotationY, localX, 0.08)
-      const [screenX, screenZ] = worldFromLocal(centerX, centerZ, rotationY, localX, 0.095)
+      const [bezelX, bezelZ] = worldFromLocal(edge.centerX, edge.centerZ, rotationY, localX, 0.08)
+      const [screenX, screenZ] = worldFromLocal(
+        edge.centerX,
+        edge.centerZ,
+        rotationY,
+        localX,
+        0.095,
+      )
       layout.videoWallBezels.push(
         instance(
           wall.id,
@@ -424,12 +626,18 @@ function addVideoWalls(layout: PerformanceInteriorLayout, doc: VmcDocument) {
           screenIndex,
           [screenX, localY, screenZ],
           [0, rotationY, 0],
-          [Math.max(0.05, screenWidth - 0.02), Math.max(0.05, screenHeight - 0.02), 0.012],
+          [
+            Math.max(0.05, screenWidth - 0.02),
+            Math.max(0.05, ((screenWidth - 0.02) * 9) / 16),
+            0.012,
+          ],
           COLORS.videoScreen,
         ),
       )
     }
   })
+
+  if (architecture.entry) addEntryArchitecture(layout, architecture.entry)
 }
 
 function addChair(
@@ -628,7 +836,7 @@ function addMonitor(
     screenRotation,
   )
 
-  const supportZ = monitorZ - direction * (MONITOR_RADIUS - 0.08)
+  const supportZ = monitorZ - direction * 0.1
   addAtZoneLocal(
     layout.monitorStems,
     zone,
@@ -711,7 +919,7 @@ function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: Insigh
       zoneRotationY,
       x,
       -(DESK_ROW_Z + DESK_DEPTH / 2 + 0.45),
-      Math.PI,
+      0,
     )
     addMonitor(
       layout,
@@ -723,7 +931,15 @@ function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: Insigh
       1,
       screenColor,
     )
-    addChair(layout, zone, positiveIndex, zoneRotationY, x, DESK_ROW_Z + DESK_DEPTH / 2 + 0.45, 0)
+    addChair(
+      layout,
+      zone,
+      positiveIndex,
+      zoneRotationY,
+      x,
+      DESK_ROW_Z + DESK_DEPTH / 2 + 0.45,
+      Math.PI,
+    )
   }
 }
 
@@ -763,7 +979,7 @@ function addRoundTable(layout: PerformanceInteriorLayout, zone: Zone) {
       0,
       Math.cos(angle) * radius * 0.85,
       Math.sin(angle) * radius * 0.85,
-      -angle + Math.PI / 2,
+      -angle - Math.PI / 2,
     )
   }
 }
@@ -810,16 +1026,54 @@ function addOffice(layout: PerformanceInteriorLayout, zone: Zone, insight: Insig
   const depth = mmToMeters(zone.h ?? 2600)
   const zoneRotationY = -(zone.rot ?? 0)
   const screenColor = zoneColor(zone, insight)
-  addAtZoneLocal(
-    layout.officeGlass,
-    zone,
-    'office-glass',
-    0,
-    zoneRotationY,
-    [0, 1.4, 0],
-    [width, 2.8, depth],
-    COLORS.office,
-  )
+  const wallThickness = 0.055
+  const isMeetingOffice = width >= 5 && depth >= 4.5
+  const northPanels = isMeetingOffice
+    ? (() => {
+        const openingWidth = 1.15
+        const panelWidth = (width - openingWidth) / 2
+        return [-1, 1].map((side, index) => ({
+          role: `office-glass-north-${index}`,
+          position: [side * (openingWidth / 2 + panelWidth / 2), 1.4, -depth / 2] as Vec3,
+          scale: [panelWidth, 2.8, wallThickness] as Vec3,
+        }))
+      })()
+    : [
+        {
+          role: 'office-glass-north',
+          position: [0, 1.4, -depth / 2] as Vec3,
+          scale: [width, 2.8, wallThickness] as Vec3,
+        },
+      ]
+  ;[
+    ...northPanels,
+    {
+      role: 'office-glass-south',
+      position: [0, 1.4, depth / 2] as Vec3,
+      scale: [width, 2.8, wallThickness] as Vec3,
+    },
+    {
+      role: 'office-glass-west',
+      position: [-width / 2, 1.4, 0] as Vec3,
+      scale: [wallThickness, 2.8, depth] as Vec3,
+    },
+    {
+      role: 'office-glass-east',
+      position: [width / 2, 1.4, 0] as Vec3,
+      scale: [wallThickness, 2.8, depth] as Vec3,
+    },
+  ].forEach((panel, index) => {
+    addAtZoneLocal(
+      layout.officeGlass,
+      zone,
+      panel.role,
+      index,
+      zoneRotationY,
+      panel.position,
+      panel.scale,
+      COLORS.office,
+    )
+  })
   addAtZoneLocal(
     layout.accentPads,
     zone,
@@ -830,18 +1084,52 @@ function addOffice(layout: PerformanceInteriorLayout, zone: Zone, insight: Insig
     [width, 0.06, depth],
     screenColor,
   )
-  addAtZoneLocal(
-    layout.tableTops,
-    zone,
-    'office-desk',
-    0,
-    zoneRotationY,
-    [0, 0.74, 0.1],
-    [1.6, 0.05, 0.85],
-    COLORS.table,
-  )
-  addMonitor(layout, zone, 0, zoneRotationY, 0, 0.1, -1, screenColor)
-  addChair(layout, zone, 0, zoneRotationY, 0, 0.85, Math.PI)
+  if (isMeetingOffice) {
+    const tableLength = Math.min(width - 1.2, 4.8)
+    const tableDepth = 1.18
+    addAtZoneLocal(
+      layout.tableTops,
+      zone,
+      'office-meeting-table',
+      0,
+      zoneRotationY,
+      [0, 0.75, 0],
+      [tableLength, 0.07, tableDepth],
+      COLORS.table,
+    )
+    ;[-1, 1].forEach((xSide, index) => {
+      addAtZoneLocal(
+        layout.tableLegs,
+        zone,
+        'office-table-pedestal',
+        index,
+        zoneRotationY,
+        [xSide * (tableLength / 2 - 0.6), 0.37, 0],
+        [0.16, 0.72, 0.5],
+        COLORS.monitorStand,
+      )
+    })
+    for (let index = 0; index < 3; index += 1) {
+      const x = -tableLength / 2 + (tableLength / 4) * (index + 1)
+      addChair(layout, zone, index * 2, zoneRotationY, x, tableDepth / 2 + 0.62, Math.PI)
+      addChair(layout, zone, index * 2 + 1, zoneRotationY, x, -tableDepth / 2 - 0.62, 0)
+    }
+    addChair(layout, zone, 6, zoneRotationY, tableLength / 2 + 0.62, 0, -Math.PI / 2)
+    addChair(layout, zone, 7, zoneRotationY, -tableLength / 2 - 0.62, 0, Math.PI / 2)
+  } else {
+    addAtZoneLocal(
+      layout.tableTops,
+      zone,
+      'office-desk',
+      0,
+      zoneRotationY,
+      [0, 0.74, 0.1],
+      [1.6, 0.05, 0.85],
+      COLORS.table,
+    )
+    addMonitor(layout, zone, 0, zoneRotationY, 0, 0.1, 1, screenColor)
+    addChair(layout, zone, 0, zoneRotationY, 0, 0.85, Math.PI)
+  }
 }
 
 function addTechnicalCeiling(layout: PerformanceInteriorLayout, doc: VmcDocument) {

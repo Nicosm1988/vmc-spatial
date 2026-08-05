@@ -1,13 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useRef } from 'react'
-import { Canvas } from '@react-three/fiber'
-import { ContactShadows, Edges, OrbitControls, Sky } from '@react-three/drei'
+import { lazy, Suspense, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { Canvas, useFrame } from '@react-three/fiber'
+import { Edges, MapControls, Sky } from '@react-three/drei'
 import * as THREE from 'three'
-import type { InsightKey, Point, VmcDocument } from '../types'
-import { toM, heat, wallGeom } from '../lib/geometry'
-import { scalePoly } from '../lib/plate'
-import { makeCarpet } from '../lib/carpet'
-import { INSIGHTS } from '../lib/insights'
-import { DeskBench, VideoWall, RoundTable, Comedor, Oficina, Window } from './Furniture'
+import type { InsightKey, VmcDocument, Zone } from '../types'
+import { toM } from '../lib/geometry'
 import { TorreYPF, Entorno } from './TorreYPF'
 import { QUALITY_PROFILES } from '../scene/qualityProfiles'
 import { useExperienceStore } from '../state/useExperienceStore'
@@ -17,7 +13,9 @@ import SceneMetrics from '../scene/SceneMetrics'
 import { EXTERIOR_DEMO_SPEC } from '../domain/exteriorSpec'
 import { mmToMeters } from '../domain/units'
 import PerformanceInterior from '../scene/interior/PerformanceInterior'
+import { resolveVideoWallArchitecture } from '../scene/interior/performanceInteriorLayout'
 import ProceduralEnvironment from '../scene/ProceduralEnvironment'
+import { FLOOR16_WORLD_FRAME, worldToFloorLocal } from '../scene/spatialFrame'
 
 const CinematicEffects = lazy(() => import('../scene/CinematicEffects'))
 
@@ -35,54 +33,102 @@ interface Props {
   onMove: (id: string, cxmm: number, cymm: number) => void
 }
 
-function shapeFrom(poly: Point[]) {
-  const shape = new THREE.Shape()
-  poly.forEach((point, index) => {
-    const x = toM(point.x)
-    const z = toM(point.y)
-    if (index === 0) shape.moveTo(x, z)
-    else shape.lineTo(x, z)
-  })
-  shape.closePath()
-  return shape
+interface EditorProxyProps {
+  zone: Zone
+  selected: boolean
 }
 
-function slab(poly: Point[], depth: number) {
-  const geometry = new THREE.ExtrudeGeometry(shapeFrom(poly), {
-    depth,
-    bevelEnabled: false,
+function DistanceAwareFloor({
+  children,
+  center,
+}: {
+  children: ReactNode
+  center: readonly [number, number, number]
+}) {
+  const group = useRef<THREE.Group>(null)
+  const revealDistanceSquared = 112 * 112
+  const hideDistanceSquared = 124 * 124
+
+  useFrame(({ camera }) => {
+    if (!group.current) return
+    const distanceSquared =
+      (camera.position.x - center[0]) ** 2 +
+      (camera.position.y - center[1]) ** 2 +
+      (camera.position.z - center[2]) ** 2
+    const experience = useExperienceStore.getState()
+    const transitionRevealsFloor =
+      experience.transition?.to !== 'exterior' &&
+      (experience.transition?.phase === 'cover' ||
+        experience.transition?.phase === 'handoff' ||
+        experience.transition?.phase === 'reveal')
+    if (experience.stage !== 'exterior' || transitionRevealsFloor) {
+      group.current.visible = true
+      return
+    }
+    group.current.visible = group.current.visible
+      ? distanceSquared < hideDistanceSquared
+      : distanceSquared < revealDistanceSquared
   })
-  geometry.rotateX(Math.PI / 2)
-  return geometry
+
+  return <group ref={group}>{children}</group>
 }
 
-function ringGeom(outer: Point[], inner: Point[], depth: number) {
-  const shape = shapeFrom(outer)
-  const hole = new THREE.Path()
-  inner.forEach((point, index) => {
-    const x = toM(point.x)
-    const z = toM(point.y)
-    if (index === 0) hole.moveTo(x, z)
-    else hole.lineTo(x, z)
-  })
-  hole.closePath()
-  shape.holes.push(hole)
-  const geometry = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false })
-  geometry.rotateX(Math.PI / 2)
-  return geometry
+function EditorZoneProxy({ zone, selected }: EditorProxyProps) {
+  const color = selected ? '#ffd166' : '#31d7c5'
+  if (zone.kind === 'circular') {
+    const radius = toM(zone.r ?? 1650)
+    return (
+      <mesh position={[0, 0.75, 0]}>
+        <cylinderGeometry args={[radius, radius, 1.5, 24]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={selected ? 0.08 : 0}
+          depthWrite={false}
+        />
+        {selected ? <Edges color={color} /> : null}
+      </mesh>
+    )
+  }
+
+  const dimensions: [number, number, number] =
+    zone.kind === 'bench'
+      ? [toM((zone.pairs ?? 3) * 1600) + 0.6, 1.55, 3.3]
+      : zone.kind === 'comedor'
+        ? [toM(zone.w ?? 3600) + 0.5, 1.4, 2.5]
+        : [toM(zone.w ?? 3800), 2.8, toM(zone.h ?? 2600)]
+
+  return (
+    <mesh position={[0, dimensions[1] / 2, 0]}>
+      <boxGeometry args={dimensions} />
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={selected ? 0.07 : 0}
+        depthWrite={false}
+      />
+      {selected ? <Edges color={color} /> : null}
+    </mesh>
+  )
+}
+
+function EditorWallProxy({ length, selected }: { length: number; selected: boolean }) {
+  const color = selected ? '#ffd166' : '#31d7c5'
+  return (
+    <mesh position={[0, 1.55, 0]}>
+      <boxGeometry args={[length, 3.1, 0.38]} />
+      <meshBasicMaterial
+        color={color}
+        transparent
+        opacity={selected ? 0.08 : 0}
+        depthWrite={false}
+      />
+      {selected ? <Edges color={color} /> : null}
+    </mesh>
+  )
 }
 
 const toMM = (meters: number) => Math.round(meters * 1000)
-
-function resample(poly: Point[], length: number): Point[] {
-  const output: Point[] = []
-  for (let index = 0; index < length; index += 1) {
-    const sourceIndex = Math.round((index * (poly.length - 1)) / length)
-    const point = poly[sourceIndex]
-    if (point) output.push(point)
-  }
-  return output
-}
 
 export default function Scene3D({
   doc,
@@ -98,65 +144,33 @@ export default function Scene3D({
   const controls = useRef<OrbitControlsHandle | null>(null)
   const drag = useRef<{ id: string; obj: THREE.Object3D } | null>(null)
   const stage = useExperienceStore((state) => state.stage)
-  const activeScene = useExperienceStore((state) => state.activeScene)
-  const transitionTouchesInterior = useExperienceStore(
-    (state) =>
-      state.transition !== null &&
-      (state.transition.from === 'interior' || state.transition.to === 'interior'),
-  )
   const night = useExperienceStore((state) => state.night)
   const quality = useExperienceStore((state) => state.resolvedQuality)
   const profile = QUALITY_PROFILES[quality]
-  const isInterior = activeScene === 'interior'
-  const showExterior = activeScene === 'exterior' || transitionTouchesInterior
-  const showInterior = activeScene === 'interior' || transitionTouchesInterior
-  const diagnosticsEnabled = useMemo(
-    () => new URLSearchParams(window.location.search).get('diagnostics') === '1',
-    [],
-  )
-
-  const floorGeometry = useMemo(() => slab(doc.plate, 0.3), [doc.plate])
-  const coreGeometry = useMemo(() => slab(doc.core, 0.14), [doc.core])
-  const carpet = useMemo(() => makeCarpet([150, 158, 168]), [])
-  const carpetDark = useMemo(() => makeCarpet([96, 100, 110]), [])
-  const centerX = toM(doc.ancho) / 2
-  const centerZ = toM(doc.alto) / 2
+  const floorCenterX = toM(doc.ancho) / 2
+  const floorCenterZ = toM(doc.alto) / 2
+  const centerX = FLOOR16_WORLD_FRAME.centerXM
+  const centerZ = FLOOR16_WORLD_FRAME.centerYM
   const cameraCenter = useMemo<[number, number, number]>(
-    () => [centerX, 0, centerZ],
+    () => [centerX, FLOOR16_WORLD_FRAME.elevationM, centerZ],
     [centerX, centerZ],
   )
   const daylightTarget = useMemo(() => {
     const target = new THREE.Object3D()
-    target.position.set(centerX, 0, centerZ)
+    target.position.set(centerX, FLOOR16_WORLD_FRAME.elevationM, centerZ)
     return target
   }, [centerX, centerZ])
-  const insightDefinition = INSIGHTS[insight]
-  const coreCenterX = doc.core.reduce((sum, point) => sum + point.x, 0) / doc.core.length
-  const coreCenterY = doc.core.reduce((sum, point) => sum + point.y, 0) / doc.core.length
-  const coreOuter = useMemo(
-    () => scalePoly(doc.core, 1.55, coreCenterX, coreCenterY),
-    [coreCenterX, coreCenterY, doc.core],
+  const diagnosticsEnabled = useMemo(
+    () => new URLSearchParams(window.location.search).get('diagnostics') === '1',
+    [],
   )
-  const ringGeometry = useMemo(() => ringGeom(coreOuter, doc.core, 0.02), [coreOuter, doc.core])
-  const windowInner = useMemo(() => scalePoly(doc.plate, 0.985, 31000, 20000), [doc.plate])
-  const windowPoints = useMemo(() => resample(windowInner, 30), [windowInner])
+  const videoWallArchitecture = useMemo(() => resolveVideoWallArchitecture(doc), [doc])
 
   useEffect(
     () => () => {
-      floorGeometry.dispose()
-      coreGeometry.dispose()
-      ringGeometry.dispose()
-    },
-    [coreGeometry, floorGeometry, ringGeometry],
-  )
-
-  useEffect(
-    () => () => {
-      carpet.dispose()
-      carpetDark.dispose()
       document.body.style.cursor = 'auto'
     },
-    [carpet, carpetDark],
+    [],
   )
 
   useEffect(() => {
@@ -166,14 +180,18 @@ export default function Scene3D({
     if (controls.current) controls.current.enabled = true
   }, [editing])
 
-  function planePoint(event: { ray: THREE.Ray }) {
+  function floorPoint(event: { ray: THREE.Ray }) {
     const denominator = event.ray.direction.y
-    if (Math.abs(denominator) < 0.0001) return { x: 0, z: 0 }
-    const distance = -event.ray.origin.y / denominator
-    return {
-      x: event.ray.origin.x + event.ray.direction.x * distance,
-      z: event.ray.origin.z + event.ray.direction.z * distance,
-    }
+    if (Math.abs(denominator) < 0.0001) return { x: centerX, y: centerZ }
+    const distance = (FLOOR16_WORLD_FRAME.elevationM - event.ray.origin.y) / denominator
+    return worldToFloorLocal(
+      {
+        x: event.ray.origin.x + event.ray.direction.x * distance,
+        y: FLOOR16_WORLD_FRAME.elevationM,
+        z: event.ray.origin.z + event.ray.direction.z * distance,
+      },
+      { x: floorCenterX, y: floorCenterZ },
+    )
   }
 
   function beginGrab(id: string, event: any) {
@@ -188,9 +206,9 @@ export default function Scene3D({
   function moveGrab(event: any) {
     if (!drag.current) return
     event.stopPropagation()
-    const point = planePoint(event)
+    const point = floorPoint(event)
     drag.current.obj.position.x = point.x
-    drag.current.obj.position.z = point.z
+    drag.current.obj.position.z = point.y
   }
 
   function endGrab() {
@@ -207,27 +225,58 @@ export default function Scene3D({
     if (controls.current) controls.current.enabled = true
   }
 
-  const stop = (event: any) => event.stopPropagation()
   const setCursor = (active: boolean) => {
-    document.body.style.cursor = editing ? (active ? 'grab' : 'auto') : active ? 'pointer' : 'auto'
+    document.body.style.cursor = editing ? (active ? 'grab' : 'auto') : 'auto'
   }
   const dragHandlers = {
     onPointerMove: moveGrab,
     onPointerUp: endGrab,
     onPointerCancel: endGrab,
   }
-  const wrap = (id: string, node: JSX.Element, extra: Record<string, unknown> = {}) => (
+  const wrapProxy = (
+    id: string,
+    node: JSX.Element,
+    position: [number, number, number],
+    rotationY = 0,
+  ) => (
     <group
       key={id}
+      position={position}
+      rotation={[0, rotationY, 0]}
       onPointerDown={(event) => beginGrab(id, event)}
-      onClick={stop}
+      onClick={(event) => event.stopPropagation()}
       {...dragHandlers}
       onPointerOver={(event) => {
         event.stopPropagation()
         setCursor(true)
       }}
       onPointerOut={() => setCursor(false)}
-      {...extra}
+    >
+      {node}
+    </group>
+  )
+  const wrapFixedProxy = (
+    id: string,
+    node: JSX.Element,
+    position: [number, number, number],
+    rotationY = 0,
+  ) => (
+    <group
+      key={id}
+      position={position}
+      rotation={[0, rotationY, 0]}
+      onPointerDown={(event) => {
+        event.stopPropagation()
+        onSelect(id)
+      }}
+      onClick={(event) => event.stopPropagation()}
+      onPointerOver={(event) => {
+        event.stopPropagation()
+        document.body.style.cursor = 'pointer'
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = 'auto'
+      }}
     >
       {node}
     </group>
@@ -245,7 +294,7 @@ export default function Scene3D({
           centerZ + mmToMeters(EXTERIOR_DEMO_SPEC.heightMm) * 1.375,
         ],
         fov: 44,
-        near: 0.1,
+        near: 0.08,
         far: 4000,
       }}
       gl={{
@@ -254,6 +303,10 @@ export default function Scene3D({
         toneMapping: THREE.ACESFilmicToneMapping,
         toneMappingExposure: night ? 1.02 : 0.9,
         preserveDrawingBuffer: true,
+      }}
+      onCreated={({ gl }) => {
+        gl.domElement.dataset.sceneComposition = 'unified-world'
+        gl.domElement.dataset.interiorRenderer = 'shared'
       }}
       onPointerMissed={() => onSelect(null)}
     >
@@ -269,23 +322,14 @@ export default function Scene3D({
       ) : (
         <color attach="background" args={['#02050b']} />
       )}
-      <fog
-        attach="fog"
-        args={[night ? '#08111d' : '#bcd2e6', isInterior ? 180 : 300, isInterior ? 520 : 1050]}
-      />
-      <hemisphereLight
-        args={[
-          night ? '#355579' : '#f0f6ff',
-          '#27362f',
-          isInterior ? (night ? 0.48 : 0.58) : night ? 0.72 : 1.05,
-        ]}
-      />
-      <ambientLight intensity={isInterior ? (night ? 0.24 : 0.18) : night ? 0.4 : 0.32} />
+      <fog attach="fog" args={[night ? '#08111d' : '#bcd2e6', 240, 1100]} />
+      <hemisphereLight args={[night ? '#355579' : '#f0f6ff', '#27362f', night ? 0.7 : 1.02]} />
+      <ambientLight intensity={night ? 0.35 : 0.28} />
       <primitive object={daylightTarget} />
       <directionalLight
         position={[centerX + 100, 150, centerZ - 50]}
         target={daylightTarget}
-        intensity={isInterior ? (night ? 0.62 : 1.28) : night ? 0.9 : 2.15}
+        intensity={night ? 0.9 : 2.05}
         color={night ? '#9fb4e0' : '#fff3e0'}
         castShadow={profile.shadows}
         shadow-mapSize-width={profile.shadowMapSize}
@@ -293,268 +337,86 @@ export default function Scene3D({
         shadow-bias={-0.0004}
         shadow-normalBias={0.025}
       >
-        <orthographicCamera
-          attach="shadow-camera"
-          args={isInterior ? [-48, 48, 42, -42, 0.1, 240] : [-100, 100, 100, -100, 0.1, 520]}
-        />
+        <orthographicCamera attach="shadow-camera" args={[-100, 100, 100, -100, 0.1, 520]} />
       </directionalLight>
       <directionalLight
         position={[centerX - 130, 96, centerZ + 190]}
         target={daylightTarget}
-        intensity={isInterior ? (night ? 0.3 : 0.42) : night ? 0.55 : 0.82}
+        intensity={night ? 0.5 : 0.78}
         color={night ? '#496582' : '#d9edff'}
       />
 
-      {showInterior ? <ProceduralEnvironment /> : null}
+      <ProceduralEnvironment />
       <Entorno centerX={centerX} centerZ={centerZ} noche={night} detail={profile.exteriorDetail} />
-      {showExterior ? (
-        <group>
-          <TorreYPF
-            centerX={centerX}
-            centerZ={centerZ}
-            noche={night}
-            detail={profile.exteriorDetail}
-          />
-        </group>
-      ) : null}
-      {showInterior && !editing ? (
-        <PerformanceInterior doc={doc} night={night} insight={insight} roof={techo} />
-      ) : null}
-      {isInterior &&
-      !transitionTouchesInterior &&
-      !editing &&
-      profile.contactShadowResolution > 0 ? (
-        <ContactShadows
-          key="stable-interior-contact-shadows"
-          position={[centerX, 0.025, centerZ]}
-          scale={[68, 48]}
-          blur={2.2}
-          opacity={night ? 0.38 : 0.3}
-          far={4.5}
-          frames={1}
-          resolution={profile.contactShadowResolution}
-          color="#111820"
-        />
-      ) : null}
-      {showInterior && editing ? (
-        <group>
-          <mesh
-            geometry={floorGeometry}
-            position={[0, -0.02, 0]}
-            receiveShadow
-            onClick={() => onSelect(null)}
-            {...dragHandlers}
-          >
-            <meshStandardMaterial map={carpet} color="#9aa2ac" roughness={0.98} metalness={0} />
-          </mesh>
-          <mesh geometry={ringGeometry} position={[0, 0.015, 0]} receiveShadow {...dragHandlers}>
-            <meshStandardMaterial map={carpetDark} color="#6a6f79" roughness={1} metalness={0} />
-          </mesh>
-          {windowPoints.map((point, index) => {
-            const nextPoint = windowPoints[(index + 1) % windowPoints.length]
-            if (!nextPoint) return null
-            const x1 = toM(point.x)
-            const z1 = toM(point.y)
-            const x2 = toM(nextPoint.x)
-            const z2 = toM(nextPoint.y)
-            const midpointX = (x1 + x2) / 2
-            const midpointZ = (z1 + z2) / 2
-            const length = Math.hypot(x2 - x1, z2 - z1)
-            if (length < 0.3) return null
-            const angle = Math.atan2(-(z2 - z1), x2 - x1)
-            return (
-              <group
-                key={`window-${index}`}
-                position={[midpointX, 0.1, midpointZ]}
-                rotation={[0, angle, 0]}
-              >
-                <Window len={length + 0.05} height={2.9} />
-              </group>
-            )
-          })}
-          {doc.zonas
-            .filter((zone) => zone.kind === 'nucleo')
-            .map((zone) => (
-              <mesh
-                key={zone.id}
-                geometry={coreGeometry}
-                position={[0, 0.07, 0]}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onSelect(zone.id)
-                }}
-                {...dragHandlers}
-              >
-                <meshStandardMaterial color="#0c1226" roughness={0.85} metalness={0.08} />
-                <Edges color={zone.id === selectedId ? '#ffd166' : '#0E9BC4'} />
-              </mesh>
-            ))}
-          {doc.videoWalls.map((wall) => {
-            const geometry = wallGeom(wall)
-            const midpointX = toM(geometry.cx)
-            const midpointZ = toM(geometry.cy)
-            const length = toM(geometry.len)
-            let angle = Math.atan2(-(wall.y2 - wall.y1), wall.x2 - wall.x1)
-            let flip = wall.flip
-            if (flip === undefined) {
-              const normalX = Math.sin(angle)
-              const normalZ = Math.cos(angle)
-              flip =
-                normalX * (geometry.cx - coreCenterX) + normalZ * (geometry.cy - coreCenterY) < 0
-            }
-            if (flip) angle += Math.PI
-            return wrap(
-              wall.id,
-              <VideoWall
-                len={length}
-                night={night}
-                count={wall.pantallas}
-                filas={wall.filas}
-                selected={wall.id === selectedId}
-              />,
-              { position: [midpointX, 0, midpointZ], rotation: [0, angle, 0] },
-            )
-          })}
-          {doc.zonas
-            .filter((zone) => zone.kind === 'bench')
-            .map((zone) => {
-              const fill = insight === 'none' ? zone.color : heat(insightDefinition.value(zone))
-              const length = toM((zone.pairs || 3) * 1600) + 0.6
-              const selected = zone.id === selectedId
-              return wrap(
-                zone.id,
-                <group>
-                  <mesh position={[0, 0.03, 0]}>
-                    <boxGeometry args={[length, 0.05, 3.3]} />
-                    <meshStandardMaterial
-                      color={fill}
-                      roughness={0.6}
-                      metalness={0.05}
-                      transparent
-                      opacity={0.14}
-                    />
-                    {selected ? <Edges color="#ffd166" /> : null}
-                  </mesh>
-                  <DeskBench pairs={zone.pairs || 3} screen={fill} night={night} />
-                </group>,
-                {
-                  position: [toM(zone.cx), 0, toM(zone.cy)],
-                  rotation: [0, -(zone.rot || 0), 0],
-                },
-              )
-            })}
-          {doc.zonas
-            .filter((zone) => zone.kind === 'circular')
-            .map((zone) => {
-              const selected = zone.id === selectedId
-              const radius = toM(zone.r || 1650)
-              return wrap(
-                zone.id,
-                <group>
-                  {selected ? (
-                    <mesh position={[0, 0.05, 0]}>
-                      <cylinderGeometry args={[radius, radius, 0.06, 24]} />
-                      <meshBasicMaterial color="#ffd166" wireframe />
-                    </mesh>
-                  ) : null}
-                  <RoundTable x={0} z={0} r={radius} seats={5} />
-                </group>,
-                { position: [toM(zone.cx), 0, toM(zone.cy)] },
-              )
-            })}
-          {doc.zonas
-            .filter((zone) => zone.kind === 'comedor')
-            .map((zone) => {
-              const selected = zone.id === selectedId
-              const width = toM(zone.w || 3600)
-              return wrap(
-                zone.id,
-                <group>
-                  {selected ? (
-                    <mesh position={[0, 0.05, 0]}>
-                      <boxGeometry args={[width + 0.6, 0.06, 2.4]} />
-                      <meshBasicMaterial color="#ffd166" wireframe />
-                    </mesh>
-                  ) : null}
-                  <Comedor x={0} z={0} w={width} rotY={0} seats={8} />
-                </group>,
-                {
-                  position: [toM(zone.cx), 0, toM(zone.cy)],
-                  rotation: [0, -(zone.rot || 0), 0],
-                },
-              )
-            })}
-          {doc.zonas
-            .filter((zone) => zone.kind === 'oficina')
-            .map((zone) => {
-              const width = toM(zone.w || 3800)
-              const height = toM(zone.h || 2600)
-              const selected = zone.id === selectedId
-              return wrap(
-                zone.id,
-                <group>
-                  <Oficina w={width} h={height} night={night} color={zone.color} />
-                  {selected ? (
-                    <mesh position={[0, 1.4, 0]}>
-                      <boxGeometry args={[width, 2.8, height]} />
-                      <meshBasicMaterial color="#ffd166" wireframe />
-                    </mesh>
-                  ) : null}
-                </group>,
-                {
-                  position: [toM(zone.cx), 0, toM(zone.cy)],
-                  rotation: [0, -(zone.rot || 0), 0],
-                },
-              )
-            })}
-          {techo ? (
-            <mesh geometry={floorGeometry} position={[0, toM(doc.alturaLibre), 0]}>
-              <meshStandardMaterial
-                color="#e9e4da"
-                transparent
-                opacity={0.35}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-          ) : null}
-          {profile.contactShadowResolution > 0 ? (
-            <ContactShadows
-              position={[centerX, 0.03, centerZ]}
-              scale={120}
-              blur={2.6}
-              opacity={0.42}
-              far={30}
-              frames={1}
-              resolution={profile.contactShadowResolution}
-              color="#0a0d12"
-            />
-          ) : null}
-        </group>
-      ) : null}
+      <TorreYPF centerX={centerX} centerZ={centerZ} noche={night} detail={profile.exteriorDetail} />
 
-      <OrbitControls
+      <group
+        name="floor16-shared-world-frame"
+        position={[centerX, FLOOR16_WORLD_FRAME.elevationM, centerZ]}
+        rotation={[0, FLOOR16_WORLD_FRAME.rotationRad, 0]}
+      >
+        <group position={[-floorCenterX, 0, -floorCenterZ]}>
+          <DistanceAwareFloor center={cameraCenter}>
+            <PerformanceInterior doc={doc} night={night} insight={insight} roof={techo} />
+
+            {editing ? (
+              <group name="editor-selection-layer">
+                {doc.zonas
+                  .filter((zone) => zone.kind !== 'nucleo')
+                  .map((zone) =>
+                    wrapProxy(
+                      zone.id,
+                      <EditorZoneProxy zone={zone} selected={zone.id === selectedId} />,
+                      [toM(zone.cx), 0, toM(zone.cy)],
+                      -(zone.rot ?? 0),
+                    ),
+                  )}
+                {doc.videoWalls.map((wall) => {
+                  const geometry = videoWallArchitecture.walls.find(
+                    (structure) => structure.ownerId === wall.id,
+                  )
+                  if (!geometry) return null
+                  return wrapFixedProxy(
+                    wall.id,
+                    <EditorWallProxy length={geometry.length} selected={wall.id === selectedId} />,
+                    [geometry.centerX, 0, geometry.centerZ],
+                    geometry.rotationY,
+                  )
+                })}
+              </group>
+            ) : null}
+          </DistanceAwareFloor>
+        </group>
+      </group>
+
+      <MapControls
         ref={controls}
         makeDefault
         target={[centerX, 17, centerZ]}
         enableDamping
-        dampingFactor={0.09}
+        dampingFactor={0.1}
         zoomToCursor
         enablePan
-        panSpeed={1.1}
-        zoomSpeed={1.2}
-        rotateSpeed={0.85}
-        screenSpacePanning={false}
-        maxPolarAngle={Math.PI / 1.9}
-        minDistance={0.8}
-        maxDistance={isInterior ? 400 : 1400}
+        panSpeed={1.15}
+        zoomSpeed={1.25}
+        rotateSpeed={0.8}
+        screenSpacePanning
+        maxPolarAngle={Math.PI / 2 - 0.02}
+        minDistance={0.45}
+        maxDistance={1400}
         mouseButtons={{
-          LEFT: THREE.MOUSE.ROTATE,
+          LEFT: THREE.MOUSE.PAN,
           MIDDLE: THREE.MOUSE.DOLLY,
-          RIGHT: THREE.MOUSE.PAN,
+          RIGHT: THREE.MOUSE.ROTATE,
         }}
-        touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+        touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }}
       />
-      <CameraDirector camApiRef={camApi} center={cameraCenter} controlsRef={controls} />
+      <CameraDirector
+        camApiRef={camApi}
+        center={cameraCenter}
+        controlsRef={controls}
+        editing={editing}
+      />
       {diagnosticsEnabled ? <SceneMetrics stage={stage} quality={quality} /> : null}
 
       {profile.postprocessing ? (
