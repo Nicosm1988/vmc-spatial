@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mmToMeters } from '../../domain/units'
 import { makeCarpet } from '../../lib/carpet'
@@ -8,6 +9,7 @@ import {
   buildPerformanceInteriorLayout,
   type PerformanceInstance,
 } from './performanceInteriorLayout'
+import { useExperienceStore } from '../../state/useExperienceStore'
 
 export interface PerformanceInteriorProps {
   doc: VmcDocument
@@ -403,10 +405,80 @@ function pickPracticalLights(placements: PerformanceInstance[], count: number) {
   })
 }
 
+function SlidingEntryDoor({ leaves }: { leaves: readonly PerformanceInstance[] }) {
+  const group = useRef<THREE.Group>(null)
+  const refs = useRef<Array<THREE.Mesh | null>>([])
+  const openness = useRef(0)
+  const localCenter = useMemo(() => {
+    const center = new THREE.Vector3()
+    leaves.forEach((leaf) => center.add(new THREE.Vector3(...leaf.position)))
+    return center.multiplyScalar(1 / Math.max(1, leaves.length))
+  }, [leaves])
+  const worldCenter = useRef(new THREE.Vector3())
+  const { camera } = useThree()
+  const stage = useExperienceStore((state) => state.stage)
+  const transitionTarget = useExperienceStore((state) => state.transition?.to)
+
+  useFrame((_, delta) => {
+    if (leaves.length !== 2 || !group.current) return
+    worldCenter.current.copy(localCenter)
+    group.current.localToWorld(worldCenter.current)
+    const shouldOpen =
+      stage === 'interior' ||
+      transitionTarget === 'interior' ||
+      camera.position.distanceToSquared(worldCenter.current) < 81
+    openness.current = THREE.MathUtils.damp(openness.current, shouldOpen ? 1 : 0, 7.5, delta)
+
+    leaves.forEach((leaf, index) => {
+      const mesh = refs.current[index]
+      if (!mesh) return
+      const side = index === 0 ? -1 : 1
+      const rotationY = leaf.rotation[1]
+      const travel = leaf.scale[0] * 0.96 * openness.current * side
+      mesh.position.set(
+        leaf.position[0] + Math.cos(rotationY) * travel,
+        leaf.position[1],
+        leaf.position[2] - Math.sin(rotationY) * travel,
+      )
+      mesh.rotation.set(...leaf.rotation)
+      mesh.scale.set(...leaf.scale)
+    })
+  })
+
+  return (
+    <group ref={group} name="double-sliding-entry-door">
+      {leaves.map((leaf, index) => (
+        <mesh
+          key={leaf.id}
+          ref={(mesh) => {
+            refs.current[index] = mesh
+          }}
+          position={leaf.position}
+          rotation={leaf.rotation}
+          scale={leaf.scale}
+          castShadow
+          renderOrder={5}
+        >
+          <boxGeometry args={[1, 1, 1]} />
+          <meshPhysicalMaterial
+            color={leaf.color}
+            transparent
+            opacity={0.34}
+            metalness={0.05}
+            roughness={0.18}
+            depthWrite={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 /**
- * Presentation renderer with the original source layout and a batched visual
- * vocabulary. Editing deliberately remains on the detailed renderer. All
- * geometry shown here is DEMO / NO VERIFICADA.
+ * Shared presentation/edit renderer with a batched visual vocabulary. Edit
+ * mode adds interaction proxies without replacing this geometry. Everything
+ * shown here remains DEMO / NO VERIFICADA.
  */
 export default function PerformanceInterior({
   doc,
@@ -418,14 +490,16 @@ export default function PerformanceInterior({
   const floorGeometry = useMemo(() => horizontalExtrusion(doc.plate, 0.3), [doc.plate])
   const coreGeometry = useMemo(() => horizontalExtrusion(doc.core, 0.14), [doc.core])
   const ringGeometry = useMemo(() => coreCarpetRing(doc.core), [doc.core])
-  const monitorFrameGeometry = useMemo(
-    () => new THREE.CylinderGeometry(0.9, 0.9, 0.4, 20, 1, true, -0.475, 0.95),
-    [],
-  )
-  const monitorScreenGeometry = useMemo(
-    () => new THREE.CylinderGeometry(0.88, 0.88, 0.34, 20, 1, true, -0.475, 0.95),
-    [],
-  )
+  const monitorFrameGeometry = useMemo(() => {
+    const geometry = new THREE.CylinderGeometry(0.9, 0.9, 0.4, 24, 1, true, -0.475, 0.95)
+    geometry.translate(0, 0, -0.9)
+    return geometry
+  }, [])
+  const monitorScreenGeometry = useMemo(() => {
+    const geometry = new THREE.CylinderGeometry(0.88, 0.88, 0.34, 24, 1, true, -0.475, 0.95)
+    geometry.translate(0, 0, -0.874)
+    return geometry
+  }, [])
   const chairSeatGeometry = useMemo(() => new RoundedBoxGeometry(1, 1, 1, 2, 0.12), [])
   const tableTopGeometry = useMemo(() => new RoundedBoxGeometry(1, 1, 1, 2, 0.045), [])
   const carpet = useMemo(() => {
@@ -584,7 +658,7 @@ export default function PerformanceInterior({
         metalness={0}
         roughness={0.12}
         depthWrite={false}
-        side={THREE.FrontSide}
+        side={THREE.DoubleSide}
         renderOrder={2}
         name="office-glass"
       />
@@ -600,12 +674,16 @@ export default function PerformanceInterior({
       />
       <InstanceBatch placements={layout.videoWallTrims} roughness={0.7} name="video-wall-trims" />
       <InstanceBatch
-        placements={layout.videoWallCabinets}
-        metalness={0.14}
-        roughness={0.54}
+        placements={layout.entryDoorFrames}
+        map={ribbedPanelTexture}
+        bumpMap={ribbedPanelTexture}
+        bumpScale={0.018}
+        metalness={0}
+        roughness={0.82}
         castShadow
-        name="video-wall-low-cabinets"
+        name="core-entry-frame"
       />
+      <SlidingEntryDoor leaves={layout.entryDoorLeaves} />
       <InstanceBatch
         placements={layout.videoWallBezels}
         metalness={0.22}
@@ -629,6 +707,23 @@ export default function PerformanceInterior({
           />
         )
       })}
+      <InstanceBatch
+        placements={layout.heroScreenFrames}
+        metalness={0.12}
+        roughness={0.34}
+        castShadow
+        name="entry-hero-screen-frame"
+      />
+      <InstanceBatch
+        placements={layout.heroScreens}
+        map={dashboardTextures[0]}
+        emissiveMap={dashboardTextures[0]}
+        emissive={night ? '#69b7ff' : '#398fd0'}
+        emissiveIntensity={night ? 0.95 : 0.42}
+        metalness={0}
+        roughness={0.18}
+        name="entry-hero-screen"
+      />
 
       <InstanceBatch
         placements={layout.tableTops}

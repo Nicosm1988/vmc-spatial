@@ -5,7 +5,6 @@ export interface QualityProfile {
   dpr: number
   shadows: boolean
   shadowMapSize: 512 | 1024 | 2048
-  contactShadowResolution: 0 | 256 | 512 | 1024
   postprocessing: boolean
   exteriorDetail: ExteriorDetail
 }
@@ -15,7 +14,6 @@ export const QUALITY_PROFILES: Record<ResolvedQuality, QualityProfile> = {
     dpr: 1,
     shadows: false,
     shadowMapSize: 512,
-    contactShadowResolution: 0,
     postprocessing: false,
     exteriorDetail: 'mid',
   },
@@ -23,7 +21,6 @@ export const QUALITY_PROFILES: Record<ResolvedQuality, QualityProfile> = {
     dpr: 1.25,
     shadows: true,
     shadowMapSize: 1024,
-    contactShadowResolution: 512,
     postprocessing: false,
     exteriorDetail: 'near',
   },
@@ -31,7 +28,6 @@ export const QUALITY_PROFILES: Record<ResolvedQuality, QualityProfile> = {
     dpr: 1.75,
     shadows: true,
     shadowMapSize: 2048,
-    contactShadowResolution: 1024,
     postprocessing: true,
     exteriorDetail: 'near',
   },

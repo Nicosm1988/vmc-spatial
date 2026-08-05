@@ -38,6 +38,16 @@ export interface ExteriorGardenSpec {
   readonly modules: readonly ExteriorGardenModuleSpec[]
 }
 
+export interface ExteriorSignageSpec {
+  readonly id: string
+  readonly label: 'YPF'
+  readonly positionMm: Point3Mm
+  readonly widthMm: number
+  readonly heightMm: number
+  readonly rotationRad: number
+  readonly status: 'demo-unverified'
+}
+
 export interface ExteriorSiteElementSpec {
   readonly id: string
   readonly kind: 'ground' | 'green-ring' | 'promenade' | 'street' | 'water'
@@ -70,6 +80,7 @@ export interface ExteriorDemoSpec {
   readonly floor16ElevationMm: number
   readonly massing: readonly ExteriorMassingSpec[]
   readonly garden: ExteriorGardenSpec
+  readonly signage: ExteriorSignageSpec
   readonly site: ExteriorSiteSpec
   readonly lod: ExteriorLodSpec
 }
@@ -151,6 +162,15 @@ export const EXTERIOR_DEMO_SPEC: ExteriorDemoSpec = deepFreeze({
         rotationRad: Math.PI / 2,
       },
     ],
+  },
+  signage: {
+    id: 'ypf-facade-letters-demo',
+    label: 'YPF',
+    positionMm: { x: -32_200, y: -14_800, elevation: 87_500 },
+    widthMm: 16_500,
+    heightMm: 5_200,
+    rotationRad: -Math.PI / 2,
+    status: 'demo-unverified',
   },
   site: {
     id: 'conceptual-site',
@@ -291,6 +311,16 @@ export function validateExteriorSpec(spec: ExteriorDemoSpec): string[] {
     validateSize(errors, module.sizeMm, `${path}.sizeMm`)
     validateRotation(errors, module.rotationRad, `${path}.rotationRad`)
   })
+
+  registerId(spec.signage.id, 'signage.id')
+  if (spec.signage.label !== 'YPF') errors.push('signage.label must be YPF')
+  if (spec.signage.status !== 'demo-unverified') {
+    errors.push('signage.status must be demo-unverified')
+  }
+  validatePoint3(errors, spec.signage.positionMm, 'signage.positionMm')
+  addIntegerMmError(errors, spec.signage.widthMm, 'signage.widthMm', true)
+  addIntegerMmError(errors, spec.signage.heightMm, 'signage.heightMm', true)
+  validateRotation(errors, spec.signage.rotationRad, 'signage.rotationRad')
 
   registerId(spec.site.id, 'site.id')
   if (spec.site.classification !== 'conceptual') {

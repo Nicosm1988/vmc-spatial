@@ -19,12 +19,13 @@ describe('ExperienceNav', () => {
     vi.restoreAllMocks()
   })
 
-  it('mantiene el paso activo accesible y no reinicia el mismo recorrido', async () => {
+  it('mantiene el paso activo accesible y lo usa para reencuadrar', async () => {
     const user = userEvent.setup()
     const ensure3D = vi.fn()
-    render(<ExperienceNav ensure3D={ensure3D} />)
+    const reframe = vi.fn()
+    render(<ExperienceNav ensure3D={ensure3D} reframe={reframe} />)
 
-    const exterior = screen.getByRole('button', { name: 'Exterior' })
+    const exterior = screen.getByRole('button', { name: 'Volver a la torre completa' })
     const floor16 = screen.getByRole('button', { name: 'Ir al piso 16' })
 
     expect(screen.getByTestId('scene-stage')).toHaveTextContent('Exterior · Puerto Madero')
@@ -33,6 +34,7 @@ describe('ExperienceNav', () => {
 
     await user.click(exterior)
     expect(ensure3D).toHaveBeenCalledTimes(1)
+    expect(reframe).toHaveBeenCalledWith('exterior')
     expect(useExperienceStore.getState().transition).toBeNull()
 
     await user.click(floor16)
@@ -44,7 +46,7 @@ describe('ExperienceNav', () => {
       transition: { to: 'floor16', phase: 'flight' },
     })
     expect(screen.getByLabelText('Recorrido 3D')).toHaveClass('experience-nav--compact')
-    expect(screen.queryByRole('button', { name: 'Ir al piso 16' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ir al piso 16' })).toBeDisabled()
     expect(ensure3D).toHaveBeenCalledTimes(2)
     expect(useExperienceStore.getState().transition?.id).toBe(transitionId)
   })
@@ -52,7 +54,7 @@ describe('ExperienceNav', () => {
   it('despacha cada destino desde una etapa estable', async () => {
     const user = userEvent.setup()
     const ensure3D = vi.fn()
-    render(<ExperienceNav ensure3D={ensure3D} />)
+    render(<ExperienceNav ensure3D={ensure3D} reframe={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Ir al piso 16' }))
     expect(useExperienceStore.getState().transition?.to).toBe('floor16')
@@ -68,7 +70,7 @@ describe('ExperienceNav', () => {
       useExperienceStore.setState({ stage: 'interior', activeScene: 'interior', transition: null })
     })
 
-    await user.click(screen.getByRole('button', { name: 'Exterior' }))
+    await user.click(screen.getByRole('button', { name: 'Volver a la torre completa' }))
     expect(useExperienceStore.getState().transition?.to).toBe('exterior')
     expect(ensure3D).toHaveBeenCalledTimes(3)
   })

@@ -1,7 +1,6 @@
 import type { ZoneKind } from '../types'
 interface Props {
   onAdd: (kind: ZoneKind) => void
-  onAddWall: () => void
 }
 const ITEMS: { kind: ZoneKind; label: string; icon: string }[] = [
   { kind: 'bench', label: 'Isla de escritorios', icon: '🖥️' },
@@ -9,7 +8,7 @@ const ITEMS: { kind: ZoneKind; label: string; icon: string }[] = [
   { kind: 'comedor', label: 'Comedor / mesa larga', icon: '🍽️' },
   { kind: 'oficina', label: 'Oficina vidriada', icon: '🏢' },
 ]
-export default function Palette({ onAdd, onAddWall }: Props) {
+export default function Palette({ onAdd }: Props) {
   return (
     <div>
       <h3>➕ Agregar objeto</h3>
@@ -20,10 +19,6 @@ export default function Palette({ onAdd, onAddWall }: Props) {
             <span>{it.label}</span>
           </button>
         ))}
-        <button className="pitem" onClick={onAddWall}>
-          <span className="pico">📺</span>
-          <span>Pared de monitores</span>
-        </button>
       </div>
     </div>
   )

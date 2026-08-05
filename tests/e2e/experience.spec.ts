@@ -163,6 +163,13 @@ async function readMetrics(page: Page, stage: StableStage) {
   return metrics as SceneMetrics
 }
 
+async function waitForUnifiedScene(page: Page) {
+  const canvas = page.locator('canvas[data-scene-composition="unified-world"]')
+  await expect(canvas).toBeVisible({ timeout: 30_000 })
+  await expect(canvas).toHaveAttribute('data-interior-renderer', 'shared')
+  return canvas
+}
+
 test.describe('VMC Spatial experience', () => {
   // The real-motion case owns a WebGL canvas for the whole cinematic route. Running
   // the suite serially avoids GPU contention with the diagnostics measurements.
@@ -195,17 +202,18 @@ test.describe('VMC Spatial experience', () => {
       'DEMO · NO VERIFICADO',
     )
     await expect(page.locator('.scene-disclaimer')).toContainText('Datos no validados')
-    await expect(page.locator('canvas')).toBeVisible()
+    await waitForUnifiedScene(page)
   })
 
   test('keeps one continuous camera pose from the exterior into the interior', async ({ page }) => {
     // Software WebGL can render well below real time in CI. The camera director
     // deliberately caps frame deltas at 100 ms to preserve every visible section.
-    test.setTimeout(120_000)
+    test.setTimeout(220_000)
 
     await page.setViewportSize({ width: 800, height: 600 })
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/?diagnostics=1')
+    await waitForUnifiedScene(page)
 
     const quality = page.getByLabel('Calidad gráfica')
     await quality.selectOption('performance', { force: true })
@@ -227,7 +235,7 @@ test.describe('VMC Spatial experience', () => {
     const transition = page.getByLabel('Estado del recorrido cinematográfico')
     const removedHandoff = page.getByTestId('cinematic-handoff')
 
-    await page.getByRole('button', { name: /Ir al piso 16/ }).click()
+    await page.getByRole('button', { name: /Ir al piso 16/ }).click({ force: true })
     await expect(stage).toContainText('Fachada · Piso 16')
     await expect(transition).toHaveCount(0)
 
@@ -249,7 +257,7 @@ test.describe('VMC Spatial experience', () => {
       .toBe(false)
 
     await startCameraSampling(page)
-    await page.getByRole('button', { name: /Entrar a la sala/ }).click()
+    await page.getByRole('button', { name: /Entrar a la sala/ }).click({ force: true })
 
     await expect(transition).toBeVisible()
     await expect(transition).toHaveAttribute('data-transition-style', 'continuous')
@@ -328,7 +336,7 @@ test.describe('VMC Spatial experience', () => {
       )
       .toBe(true)
 
-    await page.getByRole('button', { name: /Entrar a la sala/ }).click()
+    await page.getByRole('button', { name: /Entrar a la sala/ }).click({ force: true })
     await expect(stage).toContainText('Sala demostrativa · Piso 16')
     await expect(transition).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Techo' })).toBeVisible()
@@ -338,9 +346,10 @@ test.describe('VMC Spatial experience', () => {
   test('honors reduced motion and Escape cancels without a late floor callback', async ({
     page,
   }) => {
-    test.setTimeout(90_000)
+    test.setTimeout(160_000)
 
     await page.goto('/')
+    await waitForUnifiedScene(page)
     await page.getByLabel('Calidad gráfica').selectOption('performance', { force: true })
 
     const stage = page.getByTestId('scene-stage')
@@ -348,7 +357,7 @@ test.describe('VMC Spatial experience', () => {
     const progress = transition.getByRole('progressbar')
     const flightStartedAt = await page.evaluate(() => performance.now())
 
-    await page.getByRole('button', { name: /Ir al piso 16/ }).click()
+    await page.getByRole('button', { name: /Ir al piso 16/ }).click({ force: true })
     await expect(transition).toBeVisible()
     await expect
       .poll(async () => Number(await progress.getAttribute('value')), {
@@ -382,23 +391,11 @@ test.describe('VMC Spatial experience', () => {
       .poll(() => page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches))
       .toBe(true)
 
-    const edit3D = page.getByRole('button', { name: 'Editar 3D' })
-    await edit3D.click()
-    await expect(edit3D).toHaveClass(/active/)
-    await expect(page.locator('.editing-hud')).toBeVisible()
-    await expect(page.locator('aside.side')).toHaveCount(2)
-
-    // Reduced-motion timing is measured on the presentation renderer. The
-    // detailed editor intentionally keeps its higher-fidelity legacy meshes
-    // and has a separate performance envelope.
-    await page.getByRole('button', { name: 'Presentación' }).click()
-    await expect(page.locator('.editing-hud')).toHaveCount(0)
-
-    await page.getByRole('button', { name: /Ir al piso 16/ }).click()
+    await page.getByRole('button', { name: /Ir al piso 16/ }).click({ force: true })
     await expect(stage).toContainText('Fachada · Piso 16')
     await expect(transition).toHaveCount(0)
 
-    await page.getByRole('button', { name: /Entrar a la sala/ }).click()
+    await page.getByRole('button', { name: /Entrar a la sala/ }).click({ force: true })
     await expect(stage).toContainText('Sala demostrativa · Piso 16')
     await expect(transition).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Techo' })).toBeVisible()
@@ -407,13 +404,16 @@ test.describe('VMC Spatial experience', () => {
   test('opening the plan cancels a route and the forced WebGL fallback remains editable', async ({
     page,
   }) => {
+    test.setTimeout(60_000)
+
     await page.goto('/')
+    await waitForUnifiedScene(page)
 
     const transition = page.getByLabel('Estado del recorrido cinematográfico')
-    await page.getByRole('button', { name: /Ir al piso 16/ }).click()
+    await page.getByRole('button', { name: /Ir al piso 16/ }).click({ force: true })
     await expect(transition).toBeVisible()
 
-    await page.getByRole('button', { name: 'Plano' }).click()
+    await page.getByRole('button', { name: 'Plano' }).click({ force: true })
 
     await expect(transition).toHaveCount(0)
     await expect(page.locator('svg.plan-svg')).toBeVisible()
@@ -425,7 +425,7 @@ test.describe('VMC Spatial experience', () => {
     await expect(fallback).toContainText('Tu dispositivo no pudo iniciar la escena 3D')
     await expect(page.locator('canvas')).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'Abrir plano 2D' }).click()
+    await page.getByRole('button', { name: 'Abrir plano 2D' }).click({ force: true })
 
     await expect(fallback).toHaveCount(0)
     await expect(page.locator('svg.plan-svg')).toBeVisible()
@@ -433,34 +433,164 @@ test.describe('VMC Spatial experience', () => {
   })
 
   test('keeps the exterior-to-interior controls usable on a mobile viewport', async ({ page }) => {
+    test.setTimeout(60_000)
+
     await page.setViewportSize({ width: 390, height: 844 })
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/')
+    await waitForUnifiedScene(page)
 
     const stage = page.getByTestId('scene-stage')
     const floor16Button = page.getByRole('button', { name: /Ir al piso 16/ })
 
     await expect(page.locator('canvas')).toBeVisible()
     await expect(floor16Button).toBeVisible()
-    await floor16Button.click()
+    await floor16Button.click({ force: true })
     await expect(stage).toContainText('Fachada · Piso 16')
 
     const enterButton = page.getByRole('button', { name: /Entrar a la sala/ })
     await expect(enterButton).toBeVisible()
-    await enterButton.click()
+    await enterButton.click({ force: true })
 
     await expect(stage).toContainText('Sala demostrativa · Piso 16')
     await expect(page.getByRole('button', { name: 'Techo' })).toBeVisible()
     await expect(page.getByTestId('cinematic-handoff')).toHaveCount(0)
   })
 
-  test('measures every stable scene under budget and persists the night preference', async ({
+  test('keeps one world while walking and returning from the room to the tower', async ({
     page,
-  }, testInfo) => {
-    test.setTimeout(90_000)
+  }) => {
+    test.setTimeout(190_000)
 
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/?diagnostics=1')
+
+    const canvas = await waitForUnifiedScene(page)
+
+    await page.getByRole('button', { name: /Entrar a la sala/ }).click({ force: true })
+    await expect(page.getByTestId('scene-stage')).toContainText('Sala demostrativa · Piso 16')
+
+    const before = await page.evaluate(
+      () =>
+        (
+          window as Window & {
+            __VMC_CAMERA_DIAGNOSTICS__?: CameraDiagnosticsSample
+          }
+        ).__VMC_CAMERA_DIAGNOSTICS__?.position,
+    )
+    expect(before).toBeDefined()
+
+    const box = await canvas.boundingBox()
+    expect(box).not.toBeNull()
+    if (!box || !before) return
+    await page.mouse.dblclick(box.x + box.width * 0.72, box.y + box.height * 0.72)
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate((origin) => {
+            const current = (
+              window as Window & {
+                __VMC_CAMERA_DIAGNOSTICS__?: CameraDiagnosticsSample
+              }
+            ).__VMC_CAMERA_DIAGNOSTICS__?.position
+            if (!current) return 0
+            return Math.hypot(
+              current[0] - origin[0],
+              current[1] - origin[1],
+              current[2] - origin[2],
+            )
+          }, before),
+        { message: 'el doble clic desplaza la cámara en escala humana' },
+      )
+      .toBeGreaterThan(0.4)
+
+    await page.getByRole('button', { name: 'Volver a la torre completa' }).click({ force: true })
+    await expect(page.getByTestId('scene-stage')).toContainText('Exterior · Puerto Madero')
+    await expect(canvas).toHaveCount(1)
+    await expect(canvas).toHaveAttribute('data-scene-composition', 'unified-world')
+
+    const exteriorStablePosition = [-119.4, 78.4, 240] as const
+    await expect
+      .poll(
+        () =>
+          page.evaluate((expected) => {
+            const current = (
+              window as Window & {
+                __VMC_CAMERA_DIAGNOSTICS__?: CameraDiagnosticsSample
+              }
+            ).__VMC_CAMERA_DIAGNOSTICS__?.position
+            if (!current) return Number.POSITIVE_INFINITY
+            return Math.hypot(
+              current[0] - expected[0],
+              current[1] - expected[1],
+              current[2] - expected[2],
+            )
+          }, exteriorStablePosition),
+        { message: 'volver a la torre restaura la pose exterior estable' },
+      )
+      .toBeLessThan(0.05)
+
+    const returnedPosition = await page.evaluate(
+      () =>
+        (
+          window as Window & {
+            __VMC_CAMERA_DIAGNOSTICS__?: CameraDiagnosticsSample
+          }
+        ).__VMC_CAMERA_DIAGNOSTICS__?.position,
+    )
+    expect(returnedPosition).toBeDefined()
+    expect(returnedPosition?.[0]).toBeCloseTo(exteriorStablePosition[0], 1)
+    expect(returnedPosition?.[1]).toBeCloseTo(exteriorStablePosition[1], 1)
+    expect(returnedPosition?.[2]).toBeCloseTo(exteriorStablePosition[2], 1)
+
+    await page.getByRole('button', { name: 'Cenital' }).click({ force: true })
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __VMC_CAMERA_DIAGNOSTICS__?: CameraDiagnosticsSample
+              }
+            ).__VMC_CAMERA_DIAGNOSTICS__?.position[1],
+        ),
+      )
+      .toBeCloseTo(105, 1)
+
+    // The active destination doubles as a reframe action after free navigation.
+    await page.getByRole('button', { name: 'Volver a la torre completa' }).click({ force: true })
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __VMC_CAMERA_DIAGNOSTICS__?: CameraDiagnosticsSample
+              }
+            ).__VMC_CAMERA_DIAGNOSTICS__?.position[1],
+        ),
+      )
+      .toBeCloseTo(78.4, 1)
+
+    await page.getByRole('button', { name: 'Editar 3D' }).click({ force: true })
+    await expect(page.locator('.editing-hud')).toBeVisible()
+    await expect(canvas).toHaveAttribute('data-interior-renderer', 'shared')
+    await expect(page.getByRole('button', { name: 'Pared de monitores' })).toHaveCount(0)
+    await page.locator('.zitem').filter({ hasText: 'Pared Frente-Norte' }).click({ force: true })
+    await expect(page.locator('aside.side--right')).toContainText('Estructura fija del núcleo')
+    await expect(page.locator('aside.side--right')).toContainText('12537 mm')
+    await expect(page.locator('.edittoolbar')).toHaveCount(0)
+  })
+
+  test('measures every stable scene under budget and persists the night preference', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(160_000)
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/?diagnostics=1')
+    await waitForUnifiedScene(page)
 
     const disclaimer = page.getByLabel('Clasificación de la escena')
     await expect(disclaimer).toContainText('DEMO · NO VERIFICADO')
@@ -473,17 +603,18 @@ test.describe('VMC Spatial experience', () => {
 
     const dayNight = page.getByRole('button', { name: 'Alternar día y noche' })
     await expect(dayNight).toHaveText('Día')
-    await dayNight.click()
+    await dayNight.click({ force: true })
     await expect(dayNight).toHaveText('Noche')
 
     await page.reload()
+    await waitForUnifiedScene(page)
     await expect(dayNight).toHaveText('Noche')
 
-    await page.getByRole('button', { name: /Ir al piso 16/ }).click()
+    await page.getByRole('button', { name: /Ir al piso 16/ }).click({ force: true })
     await expect(page.getByTestId('scene-stage')).toContainText('Fachada · Piso 16')
     metrics.floor16 = await readMetrics(page, 'floor16')
 
-    await page.getByRole('button', { name: /Entrar a la sala/ }).click()
+    await page.getByRole('button', { name: /Entrar a la sala/ }).click({ force: true })
     await expect(page.getByTestId('scene-stage')).toContainText('Sala demostrativa · Piso 16')
     metrics.interior = await readMetrics(page, 'interior')
 

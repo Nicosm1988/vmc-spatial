@@ -21,6 +21,80 @@ export interface TowerExteriorProps {
   detail?: ExteriorDetail
 }
 
+const YPF_STROKES = [
+  // Y
+  { x: -5.95, y: 1.22, width: 0.62, height: 2.55, rotationZ: 0.52 },
+  { x: -4.72, y: 1.22, width: 0.62, height: 2.55, rotationZ: -0.52 },
+  { x: -5.34, y: -1.05, width: 0.68, height: 2.65, rotationZ: 0 },
+  // P
+  { x: -0.82, y: 0, width: 0.68, height: 4.75, rotationZ: 0 },
+  { x: 0.48, y: 2.04, width: 3.25, height: 0.64, rotationZ: 0 },
+  { x: 0.34, y: 0.15, width: 2.95, height: 0.64, rotationZ: 0 },
+  { x: 1.72, y: 1.1, width: 0.64, height: 2.5, rotationZ: 0 },
+  // F
+  { x: 4.62, y: 0, width: 0.68, height: 4.75, rotationZ: 0 },
+  { x: 5.98, y: 2.04, width: 3.4, height: 0.64, rotationZ: 0 },
+  { x: 5.72, y: 0.15, width: 2.9, height: 0.64, rotationZ: 0 },
+] as const
+
+const YPF_STROKE_DESIGN_WIDTH_M = 14.53
+const YPF_STROKE_DESIGN_HEIGHT_M = 4.86
+
+function YpfFacadeSign({ night }: { night: boolean }) {
+  const signage = EXTERIOR_DEMO_SPEC.signage
+  const letters = useRef<THREE.InstancedMesh>(null)
+
+  useLayoutEffect(() => {
+    if (!letters.current) return
+    const matrix = new THREE.Matrix4()
+    const quaternion = new THREE.Quaternion()
+    YPF_STROKES.forEach((stroke, index) => {
+      quaternion.setFromEuler(new THREE.Euler(0, 0, stroke.rotationZ))
+      matrix.compose(
+        new THREE.Vector3(stroke.x, stroke.y, 0),
+        quaternion,
+        new THREE.Vector3(stroke.width, stroke.height, 0.22),
+      )
+      letters.current?.setMatrixAt(index, matrix)
+    })
+    letters.current.instanceMatrix.needsUpdate = true
+    letters.current.computeBoundingSphere()
+  }, [])
+
+  return (
+    <group
+      name="ypf-facade-sign-demo"
+      position={[
+        mmToMeters(signage.positionMm.x),
+        mmToMeters(signage.positionMm.elevation),
+        mmToMeters(signage.positionMm.y),
+      ]}
+      rotation={[0, signage.rotationRad, 0]}
+      scale={[
+        mmToMeters(signage.widthMm) / YPF_STROKE_DESIGN_WIDTH_M,
+        mmToMeters(signage.heightMm) / YPF_STROKE_DESIGN_HEIGHT_M,
+        1,
+      ]}
+      userData={{
+        classification: 'DEMO / NO VERIFICADO',
+        provenance: 'procedural letters; no YPF logo asset embedded',
+      }}
+      renderOrder={6}
+    >
+      <instancedMesh ref={letters} args={[undefined, undefined, YPF_STROKES.length]} castShadow>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial
+          color={night ? '#f2fbff' : '#ffffff'}
+          emissive={night ? '#b8ddf0' : '#202830'}
+          emissiveIntensity={night ? 1.25 : 0.08}
+          metalness={0.12}
+          roughness={0.24}
+        />
+      </instancedMesh>
+    </group>
+  )
+}
+
 function GardenFacade({
   modules,
   night,
@@ -192,9 +266,9 @@ function FacadeLines({
         <group position={cityPosition} rotation={[0, cityRotation, 0]}>
           <lineSegments geometry={cityGeometry}>
             <lineBasicMaterial
-              color={night ? '#7292aa' : '#d4e0e6'}
+              color={night ? '#7898ae' : '#60747f'}
               transparent
-              opacity={night ? 0.32 : 0.5}
+              opacity={night ? 0.38 : 0.58}
             />
           </lineSegments>
         </group>
@@ -203,9 +277,9 @@ function FacadeLines({
         <group position={prowPosition} rotation={[0, prowRotation, 0]}>
           <lineSegments geometry={prowGeometry}>
             <lineBasicMaterial
-              color={night ? '#4f718d' : '#c8dbe6'}
+              color={night ? '#557b97' : '#7b9bac'}
               transparent
-              opacity={night ? 0.26 : 0.42}
+              opacity={night ? 0.3 : 0.46}
             />
           </lineSegments>
         </group>
@@ -299,20 +373,20 @@ export function TowerExterior({ centerX, centerZ, noche, detail = 'near' }: Towe
       <group position={cityPosition} rotation={[0, city.rotationRad, 0]}>
         <mesh geometry={geometry.cityMass} castShadow receiveShadow>
           <meshPhysicalMaterial
-            color={noche ? '#365d77' : '#94adbd'}
-            emissive={noche ? '#0d2d45' : '#000000'}
-            emissiveIntensity={noche ? 0.36 : 0}
-            metalness={noche ? 0.18 : 0.08}
-            roughness={noche ? 0.3 : 0.24}
-            clearcoat={detail === 'near' ? 0.46 : 0.12}
-            clearcoatRoughness={0.34}
+            color={noche ? '#4c5963' : '#87949b'}
+            emissive={noche ? '#182632' : '#000000'}
+            emissiveIntensity={noche ? 0.25 : 0}
+            metalness={noche ? 0.42 : 0.34}
+            roughness={noche ? 0.38 : 0.34}
+            clearcoat={detail === 'near' ? 0.34 : 0.1}
+            clearcoatRoughness={0.4}
           />
         </mesh>
       </group>
       <group position={prowPosition} rotation={[0, prow.rotationRad, 0]}>
         <mesh geometry={geometry.prowMass} castShadow receiveShadow>
           <meshPhysicalMaterial
-            color={noche ? '#315a78' : '#a2c2d3'}
+            color={noche ? '#315a78' : '#87aec2'}
             emissive={noche ? '#0b2b45' : '#000000'}
             emissiveIntensity={noche ? 0.34 : 0}
             metalness={noche ? 0.16 : 0.06}
@@ -350,8 +424,9 @@ export function TowerExterior({ centerX, centerZ, noche, detail = 'near' }: Towe
       </Detailed>
 
       <GardenFacade modules={EXTERIOR_DEMO_SPEC.garden.modules} night={noche} />
+      <YpfFacadeSign night={noche} />
 
-      {/* Remates abstractos: conservan la silueta sin reproducir marca o señalética. */}
+      {/* Remates abstractos de pendientes opuestas. */}
       <mesh
         position={[
           cityPosition[0] + mmToMeters(city.taperMm.x),

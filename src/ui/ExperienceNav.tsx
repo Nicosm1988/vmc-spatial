@@ -3,7 +3,13 @@ import { useExperienceStore } from '../state/useExperienceStore'
 
 type NavigationTarget = 'exterior' | 'floor16' | 'interior'
 
-export default function ExperienceNav({ ensure3D }: { ensure3D: () => void }) {
+export default function ExperienceNav({
+  ensure3D,
+  reframe,
+}: {
+  ensure3D: () => void
+  reframe: (target: NavigationTarget) => void
+}) {
   const stage = useExperienceStore((state) => state.stage)
   const transition = useExperienceStore((state) => state.transition)
   const activeStage = transition?.to ?? stage
@@ -15,21 +21,18 @@ export default function ExperienceNav({ ensure3D }: { ensure3D: () => void }) {
     ensure3D()
 
     const current = useExperienceStore.getState()
-    if (
-      current.transition?.to === target ||
-      (current.transition === null && current.stage === target)
-    ) {
+    if (current.transition?.to === target) return
+    if (current.transition === null && current.stage === target) {
+      reframe(target)
       return
     }
 
     action()
   }
 
-  const compact = transition !== null || stage === 'interior'
-
   return (
     <nav
-      className={`experience-nav${compact ? ' experience-nav--compact' : ''}`}
+      className="experience-nav experience-nav--compact experience-nav--persistent"
       aria-label="Recorrido 3D"
     >
       <div className="experience-nav__eyebrow">Recorrido</div>
@@ -37,44 +40,38 @@ export default function ExperienceNav({ ensure3D }: { ensure3D: () => void }) {
         <span className="status-pulse" aria-hidden="true" />
         {STAGE_LABELS[stage]}
       </div>
-      {transition === null && stage !== 'interior' ? (
-        <div className="experience-nav__actions">
-          <button
-            type="button"
-            className={activeStage === 'exterior' ? 'active' : ''}
-            aria-current={activeStage === 'exterior' ? 'step' : undefined}
-            onClick={() => run('exterior', goExterior)}
-          >
-            <span aria-hidden="true">01</span> Exterior
-          </button>
-          <button
-            type="button"
-            className={activeStage === 'floor16' ? 'active' : ''}
-            aria-current={activeStage === 'floor16' ? 'step' : undefined}
-            onClick={() => run('floor16', goToFloor16)}
-          >
-            <span aria-hidden="true">02</span> Ir al piso 16
-          </button>
-          <button
-            type="button"
-            className={activeStage === 'interior' ? 'active' : ''}
-            aria-current={activeStage === 'interior' ? 'step' : undefined}
-            onClick={() => run('interior', enterInterior)}
-          >
-            <span aria-hidden="true">03</span> Entrar a la sala
-          </button>
-        </div>
-      ) : null}
-      {transition === null && stage === 'interior' ? (
+      <div className="experience-nav__actions">
         <button
           type="button"
-          className="experience-nav__exit"
-          aria-label="Exterior"
+          className={activeStage === 'exterior' ? 'active' : ''}
+          aria-label="Volver a la torre completa"
+          aria-current={activeStage === 'exterior' ? 'step' : undefined}
+          disabled={transition !== null}
           onClick={() => run('exterior', goExterior)}
         >
-          Salir
+          <span aria-hidden="true">01</span> Torre completa
         </button>
-      ) : null}
+        <button
+          type="button"
+          className={activeStage === 'floor16' ? 'active' : ''}
+          aria-label="Ir al piso 16"
+          aria-current={activeStage === 'floor16' ? 'step' : undefined}
+          disabled={transition !== null}
+          onClick={() => run('floor16', goToFloor16)}
+        >
+          <span aria-hidden="true">02</span> Piso 16
+        </button>
+        <button
+          type="button"
+          className={activeStage === 'interior' ? 'active' : ''}
+          aria-label="Entrar a la sala"
+          aria-current={activeStage === 'interior' ? 'step' : undefined}
+          disabled={transition !== null}
+          onClick={() => run('interior', enterInterior)}
+        >
+          <span aria-hidden="true">03</span> Sala
+        </button>
+      </div>
     </nav>
   )
 }
