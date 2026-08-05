@@ -54,6 +54,29 @@ describe('cinematic access contract', () => {
     }
   })
 
+  it('keeps camera geometry in one shared world frame across renderer handoff', () => {
+    for (const route of CINEMATIC_ACCESS_ROUTES) {
+      expect(route.waypoints.every((waypoint) => waypoint.frame === 'shared-world')).toBe(true)
+    }
+
+    const floorArrival = getCinematicRoute('exterior', 'floor16')?.waypoints.at(-1)
+    const interiorDeparture = getCinematicRoute('floor16', 'interior')?.waypoints[0]
+    expect(interiorDeparture?.positionMm).toEqual(floorArrival?.positionMm)
+    expect(interiorDeparture?.lookAtMm).toEqual(floorArrival?.lookAtMm)
+    expect(interiorDeparture?.fovDeg).toBe(floorArrival?.fovDeg)
+  })
+
+  it('runs the direct exterior-to-interior route through the stable floor 16 pose', () => {
+    const floorArrival = getCinematicRoute('exterior', 'floor16')?.waypoints.at(-1)
+    const directFloor16 = getCinematicRoute('exterior', 'interior')?.waypoints.find(
+      (waypoint) => waypoint.id === 'v2-exterior-interior-floor16',
+    )
+
+    expect(directFloor16?.positionMm).toEqual(floorArrival?.positionMm)
+    expect(directFloor16?.lookAtMm).toEqual(floorArrival?.lookAtMm)
+    expect(directFloor16?.fovDeg).toBe(floorArrival?.fovDeg)
+  })
+
   it('uses stable globally unique route and waypoint IDs', () => {
     const routeIds = CINEMATIC_ACCESS_ROUTES.map((route) => route.id)
     const waypointIds = CINEMATIC_ACCESS_ROUTES.flatMap((route) =>

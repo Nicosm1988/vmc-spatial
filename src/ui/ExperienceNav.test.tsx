@@ -43,12 +43,9 @@ describe('ExperienceNav', () => {
       stage: 'exterior',
       transition: { to: 'floor16', phase: 'flight' },
     })
-    expect(floor16).toHaveAttribute('aria-current', 'step')
-    expect(exterior).not.toHaveAttribute('aria-current')
-    expect(floor16).not.toBeDisabled()
-
-    await user.click(floor16)
-    expect(ensure3D).toHaveBeenCalledTimes(3)
+    expect(screen.getByLabelText('Recorrido 3D')).toHaveClass('experience-nav--compact')
+    expect(screen.queryByRole('button', { name: 'Ir al piso 16' })).not.toBeInTheDocument()
+    expect(ensure3D).toHaveBeenCalledTimes(2)
     expect(useExperienceStore.getState().transition?.id).toBe(transitionId)
   })
 

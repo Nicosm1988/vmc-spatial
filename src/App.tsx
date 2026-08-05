@@ -18,7 +18,6 @@ import QualitySelector from './ui/QualitySelector'
 import SceneErrorBoundary from './ui/SceneErrorBoundary'
 import SceneLoadingOverlay from './ui/SceneLoadingOverlay'
 import TransitionStatus from './ui/TransitionStatus'
-import CinematicHandoff from './ui/CinematicHandoff'
 import WebGLFallback from './ui/WebGLFallback'
 import { supportsWebGL } from './lib/webgl'
 
@@ -116,7 +115,7 @@ export default function App() {
   const [mode, setMode] = useState<AppMode>('explorar')
   const [view, setView] = useState<ViewKind>('3d')
   const [insight, setInsight] = useState<InsightKey>('none')
-  const [roof, setRoof] = useState(false)
+  const [roof, setRoof] = useState(true)
   const [snap, setSnap] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [webGLAvailable] = useState(supportsWebGL)
@@ -477,7 +476,6 @@ export default function App() {
         {view === '3d' && stage === 'interior' ? <CameraPanel camApi={camApi} /> : null}
         {view === '2d' || stage === 'interior' ? <InsightsLegend insight={insight} /> : null}
         {view === '3d' ? <TransitionStatus /> : null}
-        {view === '3d' ? <CinematicHandoff /> : null}
 
         <div className="scene-disclaimer" role="status" aria-label="Clasificación de la escena">
           <span>DEMO · NO VERIFICADO</span>

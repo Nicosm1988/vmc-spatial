@@ -2,112 +2,137 @@
 
 ## Resultado y clasificación
 
-La Fase 3 reemplaza el desplazamiento lineal de cámara por una navegación cinematográfica tokenizada entre `exterior`, `floor16` e `interior`. La aproximación al piso 16 usa una trayectoria curva, el cambio entre los árboles WebGL exterior e interior ocurre bajo una cobertura visual y la interfaz informa fase, destino y progreso sin bloquear el resto de la aplicación.
+La corrección de Fase 3 implementa un plano secuencia continuo entre `exterior`, `floor16` e `interior`. La cámara recorre una única curva espacial; exterior e interior coexisten durante el cruce y la propiedad de la escena cambia de forma atómica, sin salto de pose. Se eliminaron el portal artificial, el velo opaco de cambio de fase y las pausas de entrega.
 
-Toda posición, encuadre, duración, trayectoria, acceso y geometría de esta experiencia permanece clasificada como **DEMO / NO VERIFICADA**. El recorrido no representa una ruta física, una abertura real ni un acceso operativo validado.
+Todos los encuadres, duraciones, trayectorias, posiciones, layouts, transformaciones, inventarios y geometrías de esta experiencia permanecen clasificados como **DEMO / NO VERIFICADOS**. El recorrido no representa una ruta física, una abertura real ni un acceso operativo validado.
 
-Esta fase también elimina por completo los edificios circundantes conceptuales del contrato exterior y del renderer. Permanecen el suelo/plaza, el anillo verde con vegetación, el paseo, la calle, el agua y la pérgola, todos igualmente conceptuales y no verificados.
+Esta fase también elimina por completo los edificios circundantes conceptuales del contrato exterior y del renderer. Permanecen suelo/plaza, vegetación, paseo, calle, agua y pérgola, todos igualmente conceptuales y no verificados.
 
-La inspección E2E detectó además que el renderer interior detallado impedía una entrega fluida en WebGL por software. La vista de presentación ahora usa un LOD procedural con 982 instancias agrupadas; el modo de edición conserva el renderer detallado y sus herramientas existentes.
+La vista interior de presentación vuelve a derivarse del mismo documento DEMO y conserva su layout y transformaciones originales. Usa geometría procedural e instanciada para sostener el plano secuencia; el modo de edición mantiene el renderer detallado y sus herramientas.
 
-## Contrato de rutas y unidades
+## Contrato de rutas `v2` y unidades
 
 `src/domain/cinematicAccess.ts` declara un contrato inmutable para cada par dirigido de etapas estables. Cada ruta tiene:
 
-- un ID de ruta estable y estado `demo-unverified`;
+- un ID estable con sufijo `v2` y estado `demo-unverified`;
 - origen y destino semánticos;
-- árbol de escena de origen y destino;
-- duración, punto de `handoff` y fases ordenadas;
+- escena activa de origen y destino;
+- duración, progreso de `handoff` y fases ordenadas;
 - waypoints con IDs estables, progreso, posición, objetivo de mirada y FOV;
-- coordenadas espaciales en milímetros enteros sobre el plano de dominio `x/y`, con `elevation` para altura.
+- coordenadas espaciales en milímetros enteros sobre el plano de dominio `x/y`, con `elevation` para altura;
+- un único marco de coordenadas `shared-world` para todos los waypoints, incluso cuando cambia el árbol que renderiza la escena.
 
-El dominio no contiene `Vector3`, curvas ni APIs de Three.js. `src/scene/cameraPath.ts` es el adaptador que convierte milímetros a metros, mapea `x/y/elevation` a `x/z/y` y calcula las muestras curvas para posición y mirada. Al cruzar entre los marcos exterior e interior, el adaptador nunca interpola coordenadas de escenas diferentes.
+El dominio no contiene `Vector3`, curvas ni APIs de Three.js. `src/scene/cameraPath.ts` convierte milímetros a metros, mapea `x/y/elevation` a `x/z/y`, calcula las tangentes y muestrea posición, mirada y FOV con Hermite no uniforme y continuidad C1. Los extremos del recorrido frenan de manera controlada; los waypoints internos no introducen una detención por segmento.
 
-Cada intento de navegación recibe un token numérico monotónico. Las actualizaciones de fase, progreso, entrega y finalización sólo se aceptan si conservan ese token; por eso una callback de una transición cancelada o reemplazada no puede confirmar un destino posterior.
+Cada intento de navegación recibe un token numérico monotónico. Las actualizaciones de fase, progreso, entrega y finalización sólo se aceptan si conservan ese token; una callback de una transición cancelada o reemplazada no puede confirmar un destino posterior.
 
-## Estado estable, escena activa y handoff
+## Estado estable, coexistencia y handoff atómico
 
 La navegación separa dos conceptos:
 
 - `stage` es el último destino estable completado (`exterior`, `floor16` o `interior`);
-- `activeScene` es el árbol WebGL montado en ese instante (`exterior` o `interior`).
+- `activeScene` es el destino operativo del renderer (`exterior` o `interior`).
 
-Durante una entrada, `stage` conserva el origen hasta completar el recorrido. Al alcanzar el punto de entrega, `activeScene` pasa al árbol de destino bajo el velo de `CinematicHandoff`; recién al terminar se confirma el nuevo `stage`. Esto evita presentar una etapa como finalizada mientras la revelación visual todavía está en curso.
+Durante una transición que toca el interior, `Scene3D` mantiene montados simultáneamente exterior e interior. `CameraDirector` toma todas las muestras de una sola curva `shared-world`; al alcanzar `handoffProgress`, cambia `activeScene` en ese mismo frame y conserva exactamente la pose, la mirada y el FOV ya aplicados. El árbol anterior permanece disponible durante el cruce y se desmonta al finalizar, cuando la escena de destino queda estable.
 
-El handoff aplica una secuencia `flight → cover → handoff → reveal`. La cobertura DOM oculta el cambio de marco, mientras `CameraDirector` mantiene la cámara en el último pose del origen y luego la inicia en el primer pose del destino. El portal del piso 16 es un marcador procedural conceptual derivado de `EXTERIOR_DEMO_SPEC`; no es una ventana ni una abertura física confirmada.
+No existe un componente de portal, un velo DOM opaco ni un hold de `420 ms`/`140 ms`. Los nombres de fase `cover`, `handoff` y `reveal` se conservan como metadatos de progreso y accesibilidad, no como interrupciones temporales ni cambios de sistema de coordenadas.
+
+El punto de entrega exterior → interior del documento DEMO es `{-14000, 14200, 2400} mm` relativo al centro de escena; con el centro actual `[31, 0, 20] m`, la cámara queda en `[17, 2.4, 34.2] m`. Está parametrizado aproximadamente `0,1 m` detrás de la envolvente procedural DEMO. Esa relación no confirma una fachada real. Las pruebas fijan como objetivo matemático que todos los handoffs entre escenas recorran menos de `0,5 m` por frame a 60 Hz; esto no es una garantía de FPS del dispositivo.
 
 ## Accesibilidad, cancelación y movimiento reducido
 
-La interfaz cinematográfica conserva visible `DEMO / NO VERIFICADO` y ofrece:
+La interfaz conserva visible `DEMO / NO VERIFICADO` y ofrece:
 
-- estado no modal con fase, destino y porcentaje;
+- estado no modal con fase, destino y porcentaje continuo;
 - `<progress>` con nombre y valor accesibles;
 - anuncio discreto mediante `role="status"` y `aria-live="polite"`;
 - botón de cancelación con atajo `Escape` declarado;
-- indicadores decorativos y velo de handoff ocultos del árbol accesible.
+- encuadre decorativo que no bloquea la escena ni funciona como cobertura opaca.
 
-`prefers-reduced-motion: reduce` evita el vuelo y resuelve directamente la pose y el destino. Cancelar invalida el token activo, desmonta el feedback transitorio, restaura el `stage`/`activeScene` de origen y vuelve a habilitar los controles de cámara. Abrir el plano 2D también cancela cualquier recorrido activo.
+`prefers-reduced-motion: reduce` evita el vuelo y resuelve directamente la pose y el destino. Cancelar invalida el token activo, restaura el `stage`/`activeScene` de origen y vuelve a habilitar los controles de cámara. Abrir el plano 2D también cancela cualquier recorrido activo.
 
-## Exterior sin edificios circundantes
+## Interior de presentación
 
-La remoción se hizo en las dos fronteras necesarias:
+`PerformanceInterior` deriva sus batches del mismo `VmcDocument` que alimenta el plano, el editor y la exportación. La corrección restaura las posiciones, rotaciones y relaciones locales del renderer original, mantiene IDs derivados estables y no muta el documento fuente.
 
-1. `ExteriorSiteElementSpec['kind']` ya no admite `context-block` y `EXTERIOR_DEMO_SPEC` no publica ese elemento.
-2. `UrbanContext` ya no crea ni monta instancias de edificios circundantes.
+El inventario técnico que el preset DEMO produce en este corte es:
 
-No quedan placeholders ni costo de render asociado a esos bloques. La decisión no confirma la relación espacial de los elementos restantes: suelo/plaza, vegetación, calle, agua, paseo y pérgola continúan siendo una composición **DEMO / NO VERIFICADA**.
+| Elemento               | Cantidad |
+| ---------------------- | -------: |
+| Puestos de trabajo     |      130 |
+| Sillas                 |      184 |
+| Monitores              |      130 |
+| Pantallas de videowall |       98 |
+
+Estas cantidades describen objetos derivados por el software; **no confirman inventario ni disposición física**.
+
+El lenguaje visual del interior se genera proceduralmente en código y puede estar orientado por referencias visuales restringidas. Las fotografías de referencia no se copian, suben ni publican: no entran al repositorio, al bundle ni al despliegue. La existencia de una referencia tampoco transfiere derechos ni convierte el resultado en una réplica fiel.
+
+En presentación se usa el renderer instanciado. En edición 3D se conserva el renderer detallado para selección y transformaciones. Durante el plano secuencia que toca el interior, la coexistencia deliberada es entre las escenas exterior e interior; fuera de la transición se mantiene sólo el árbol correspondiente al estado estable.
+
+## Exterior sin edificios circundantes ni portal
+
+La remoción se hizo en las fronteras de contrato y render:
+
+1. `ExteriorSiteElementSpec['kind']` ya no admite `context-block` y `EXTERIOR_DEMO_SPEC` no publica edificios circundantes ni un portal de acceso.
+2. `UrbanContext` ya no crea ni monta instancias de edificios vecinos.
+3. `Scene3D` no importa ni monta un `AccessPortal`; la cámara cruza directamente la envolvente procedural DEMO.
+
+No quedan placeholders ni costo de render asociado a esos objetos. La decisión no confirma la relación espacial de los elementos restantes: suelo/plaza, vegetación, calle, agua, paseo y pérgola continúan siendo una composición **DEMO / NO VERIFICADA**.
 
 ## Árbol de cambios
 
 ```text
 src/
-  App.tsx                              # preferencia de movimiento y handoff DOM
-  components/Scene3D.tsx              # activeScene y portal procedural
+  App.tsx                              # composición, movimiento reducido y cancelación
+  components/Scene3D.tsx              # coexistencia temporal exterior/interior
   domain/
-    cinematicAccess.ts                # rutas DEMO, tokens e invariantes en mm
+    cinematicAccess.ts                # rutas v2 DEMO en shared-world y mm
     cinematicAccess.test.ts
     experience.ts                     # stage estable vs activeScene
-    exteriorSpec.ts                   # portal; context-block removido
+    exteriorSpec.ts                   # sin context-block ni portal
     exteriorSpec.test.ts
   scene/
-    CameraDirector.tsx                # ejecución token-safe y diagnóstico opt-in
-    cameraPath.ts                     # mm→m y curvas sólo en escena
+    CameraDirector.tsx                # curva continua, handoff atómico y diagnóstico
+    cameraPath.ts                     # mm→m y Hermite C1 sólo en escena
     cameraPath.test.ts
     exterior/
-      AccessPortal.tsx                # marcador procedural conceptual
       UrbanContext.tsx                # sitio restante, sin edificios vecinos
     interior/
-      PerformanceInterior.tsx         # LOD instanciado para presentación
-      performanceInteriorLayout.ts    # batches desde el documento canónico
+      PerformanceInterior.tsx         # presentación procedural instanciada
+      performanceInteriorLayout.ts    # layout desde el documento canónico
       performanceInteriorLayout.test.ts
   state/
-    useExperienceStore.ts             # máquina de transición efímera
+    useExperienceStore.ts             # transición tokenizada y efímera
     useExperienceStore.test.ts
   ui/
-    CinematicHandoff.tsx              # cobertura del cambio de árbol WebGL
     ExperienceNav.tsx
     ExperienceNav.test.tsx
-    TransitionStatus.tsx
+    TransitionStatus.tsx              # progreso continuo, no modal
     TransitionStatus.test.tsx
   styles.css                          # encuadre, progreso y reduced motion
-tests/e2e/experience.spec.ts          # navegación real, cancelación y métricas
+tests/e2e/experience.spec.ts          # navegación, coexistencia, cancelación y métricas
 docs/PHASE_3_CINEMATIC_ACCESS.md
 README.md
 ARCHITECTURE.md
 docs/ASSUMPTIONS_AND_FACTS.md
 ```
 
+Los componentes eliminados `AccessPortal` y `CinematicHandoff` no forman parte de la arquitectura vigente.
+
 ## Cobertura de pruebas
 
 Las pruebas agregadas o ampliadas cubren:
 
-- contrato DEMO inmutable, rutas dirigidas completas, IDs únicos, milímetros enteros y `handoff` válido;
-- conversión mm→m, muestras curvas finitas, endpoints deterministas y separación de marcos exterior/interior;
-- tokens obsoletos, cancelación después del handoff, progreso acotado y exclusión del estado de cámara de la persistencia;
-- semántica accesible del estado, progreso, anuncio, cancelación y cobertura visual;
-- ausencia de `context-block` en el contrato exterior;
-- inventario instanciado del interior de presentación, transforms finitos, IDs derivados estables y reacción a insights;
-- E2E serial del recorrido con movimiento real, entrada cubierta, cancelación por `Escape`, fallback de movimiento reducido, plano 2D, fallback WebGL y ausencia de nuevos errores de consola/página.
+- contrato DEMO inmutable, rutas dirigidas `v2`, IDs únicos, `shared-world`, milímetros enteros y marcador exacto de `handoff`;
+- conversión mm→m, muestras finitas, endpoints deterministas, continuidad de pose y tangente C1, y ausencia de detenciones en waypoints internos;
+- distancia menor a `0,5 m` por frame a 60 Hz alrededor de cada handoff entre escenas;
+- tokens obsoletos, cancelación, progreso acotado y exclusión del estado de cámara de la persistencia;
+- semántica accesible del estado, progreso, anuncio, cancelación y movimiento reducido;
+- coexistencia exterior/interior durante el cruce y ausencia de cobertura opaca;
+- ausencia de `context-block` y portal en el exterior;
+- layout interior instanciado, transformaciones equivalentes al renderer original, IDs derivados estables, documento fuente inmutable y cantidades `130/184/130/98`;
+- E2E serial del recorrido, cancelación por `Escape`, fallback de movimiento reducido, plano 2D, fallback WebGL y ausencia de nuevos errores de consola/página.
 
 Antes de integrar se deben ejecutar:
 
@@ -116,53 +141,56 @@ npm run check
 npm run test:e2e
 ```
 
-El resultado final de esos comandos debe registrarse junto al PR/deployment; esta documentación no los da por aprobados antes de su ejecución.
+El resultado final de esos comandos debe registrarse junto al PR o deployment; esta documentación no los da por aprobados antes de su ejecución.
 
-## Diagnóstico y medición
+## Diagnóstico y benchmark reproducible
 
 El diagnóstico sigue siendo opt-in con `?diagnostics=1`:
 
-- `window.__VMC_SCENE_METRICS__` expone el último snapshot del renderer para una etapa estable;
-- `window.__VMC_CAMERA_DIAGNOSTICS__` expone token/ruta, fase, progreso, `stage`, `activeScene`, preferencia de movimiento, pose, objetivo y FOV mientras el diagnóstico está habilitado;
+- `window.__VMC_SCENE_METRICS__` expone el último snapshot del renderer;
+- `window.__VMC_CAMERA_DIAGNOSTICS__` expone token/ruta, fase, progreso, `stage`, `activeScene`, preferencia de movimiento, pose, objetivo y FOV;
+- el evento efímero `vmc-camera-diagnostics` entrega ese snapshot en cada frame renderizado para medir continuidad sin polling;
 - ambas propiedades se retiran al desmontar sus colectores y no se persisten.
 
-Los objetivos de la escena base continúan siendo menos de 200 draw calls, menos de 250.000 triángulos visibles y texturas de hasta 2K por defecto.
+Los objetivos de la escena base continúan siendo menos de 200 draw calls, menos de 250.000 triángulos visibles y texturas de hasta 2K por defecto. Son presupuestos, no claims.
 
-Método para la medición final:
+Método usado para la medición final:
 
-1. ejecutar Chromium con viewport, DPR, preset de calidad y modo día/noche registrados;
-2. abrir `/?diagnostics=1` con `prefers-reduced-motion: reduce` para estabilizar cada destino sin introducir el vuelo en el muestreo;
-3. capturar `__VMC_SCENE_METRICS__` en `exterior`, `floor16` e `interior` sólo cuando `stage` coincida y el frame sea válido;
-4. adjuntar el JSON generado por Playwright y registrar hardware, navegador y resolución;
-5. comparar llamadas y triángulos con los presupuestos sin extrapolar FPS ni fidelidad física.
+1. registrar commit/artefacto, hardware, navegador, viewport, DPR, preset, modo día/noche y estado del techo;
+2. abrir `/?diagnostics=1` y estabilizar cada destino, sin mezclar muestras del renderer detallado de edición;
+3. capturar `__VMC_SCENE_METRICS__` en `exterior`, `floor16` e `interior` cuando `stage` coincida y el frame sea válido;
+4. medir por separado el intervalo de coexistencia exterior/interior, porque tiene un costo transitorio distinto;
+5. adjuntar el JSON generado y comparar llamadas, triángulos, geometrías y texturas sin extrapolar FPS ni fidelidad física.
 
-Medición local del 2026-08-04: Chromium headless controlado por Playwright, viewport `1600 × 832`, DPR efectivo `1`, perfil explícito `balanced`, modo día y destinos estabilizados con movimiento reducido. Los valores son snapshots del renderer, no una medición de FPS ni una garantía para otros dispositivos, perfiles o el renderer detallado de edición.
+El artefacto [`benchmarks/phase3-balanced-2026-08-04.json`](./benchmarks/phase3-balanced-2026-08-04.json) registra Chromium 151, GPU AMD Radeon integrada mediante ANGLE, viewport CSS 921×886, DPR 1, perfil equilibrado, día y techo activo. En ese contexto:
 
-| Etapa estable | Draw calls | Triángulos | Geometrías | Texturas |
-| ------------- | ---------: | ---------: | ---------: | -------: |
-| `exterior`    |         28 |     12.234 |         19 |        1 |
-| `floor16`     |         29 |     12.262 |         21 |        1 |
-| `interior`    |         19 |     13.540 |         17 |        1 |
+- exterior estable: 28 llamadas y 12.234 triángulos;
+- piso 16 estable: 22 llamadas y 11.546 triángulos;
+- interior estable: 55 llamadas y 171.640 triángulos;
+- máximo durante exterior→piso 16: 28 llamadas y 12.234 triángulos;
+- máximo durante piso 16→interior: 64 llamadas y 172.942 triángulos.
 
-En este contexto reproducible las tres escenas de presentación quedan por debajo de los objetivos de draw calls y triángulos. El resultado no se extrapola a FPS, modo noche, perfil cinematográfico, edición 3D detallada ni hardware distinto.
+Los estados estables y ambas rutas cumplen los presupuestos de llamadas y triángulos en ese perfil medido. El horneado único de sombras de contacto, posterior a la llegada estable, alcanzó transitoriamente 111 llamadas y 342.354 triángulos internos por sus pases offscreen de profundidad y blur; no es geometría visible ni ocurrió dentro del plano secuencia. No se extrapolan FPS ni resultados a otro hardware, navegador, viewport o preset.
 
 ## Riesgos, mitigaciones y rollback
 
-| Riesgo                                                     | Mitigación incluida                                                  | Señal de rollback                                                   |
-| ---------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Una callback tardía completa un recorrido cancelado        | Tokens monotónicos y validación del ID en cada mutación              | El destino cambia después de cancelar o reemplazar una ruta         |
-| El cambio exterior/interior produce un salto visible       | `cover`, handoff explícito, velo DOM y poses separadas por marco     | Flash del árbol incorrecto o cámara interpolada entre marcos        |
-| El vuelo provoca mareo o pérdida de orientación            | `prefers-reduced-motion`, cancelación por botón/Escape y UI no modal | El fallback no termina rápido o el usuario queda sin control        |
-| La curva atraviesa geometría o encuadra fuera del portal   | Waypoints DEMO versionados y pruebas de muestras finitas/endpoints   | Clipping reproducible en viewport objetivo                          |
-| La UI cinematográfica tapa controles en pantallas pequeñas | Capas decorativas sin interacción y reglas responsive/reduced motion | Navegación principal o clasificación DEMO dejan de ser operables    |
-| La remoción de edificios deja referencias huérfanas        | Eliminación conjunta del contrato, renderer, tests y documentación   | Reaparece `context-block` o una instancia de edificios circundantes |
-| El interior detallado bloquea el handoff en equipos lentos | LOD instanciado sólo en presentación; edición conserva su renderer   | La presentación vuelve a montar miles de geometrías individuales    |
+| Riesgo                                                      | Mitigación incluida                                                     | Señal de rollback                                                      |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Una callback tardía completa un recorrido cancelado         | Tokens monotónicos y validación del ID en cada mutación                 | El destino cambia después de cancelar o reemplazar una ruta            |
+| El cambio exterior/interior produce un salto visible        | Marco compartido, curva C1, coexistencia y handoff en la misma muestra  | Discontinuidad visible o distancia mayor al objetivo por frame         |
+| La coexistencia aumenta demasiado el costo durante el cruce | Ambos árboles se mantienen sólo mientras la transición toca el interior | Pérdida reproducible de fluidez o memoria fuera del presupuesto medido |
+| El vuelo provoca mareo o pérdida de orientación             | `prefers-reduced-motion`, botón/Escape y UI no modal                    | El fallback no termina rápido o el usuario queda sin control           |
+| La curva atraviesa geometría procedural                     | Waypoints DEMO versionados y pruebas de continuidad/endpoints           | Clipping reproducible en el viewport objetivo                          |
+| El interior instanciado deriva del layout original          | Pruebas de transforms, IDs, cantidades y no mutación del documento      | Muebles corridos, rotados o ausentes respecto del preset               |
+| Una referencia visual termina publicada como asset          | Lenguaje procedural y prohibición de copiar fotos al repo/bundle/deploy | Aparece una foto o archivo sin manifiesto, licencia y aprobación       |
+| La remoción de edificios deja referencias huérfanas         | Eliminación conjunta del contrato, renderer, tests y documentación      | Reaparece `context-block` o una instancia de edificios circundantes    |
 
 Rollback recomendado, sin modificar `vmc-spatial/6` ni los documentos de sala:
 
-1. deshabilitar la navegación cinematográfica en la composición y volver a poses estables directas;
-2. retirar `CinematicHandoff` y `TransitionStatus` sólo junto con la máquina de transición que los alimenta;
-3. conservar `EXTERIOR_DEMO_SPEC`, el portal procedural y la remoción de edificios como cambios independientes, salvo decisión explícita distinta;
-4. ejecutar nuevamente `npm run check` y `npm run test:e2e` antes de publicar el rollback.
+1. deshabilitar la navegación cinematográfica y volver temporalmente a poses estables directas;
+2. conservar la UI de progreso sólo si sigue alimentada por una transición válida;
+3. mantener la remoción de portal, velo opaco, pausas y edificios circundantes: no son mecanismos de fallback;
+4. conservar el interior derivado del documento o aislarlo detrás del modo de presentación sin cambiar sus datos;
+5. ejecutar nuevamente `npm run check` y `npm run test:e2e` antes de publicar el rollback.
 
-No se deben reintroducir edificios circundantes como parte de un rollback de cámara: su remoción fue un requisito funcional separado de esta fase.
+No se deben reintroducir edificios circundantes, un portal artificial ni una cobertura negra como parte de un rollback de cámara.

@@ -34,7 +34,7 @@ describe('experience store', () => {
       transitioning: true,
       transition: {
         id,
-        routeId: 'cinematic-exterior-floor16-v1',
+        routeId: 'cinematic-exterior-floor16-v2',
         from: 'exterior',
         to: 'floor16',
         phase: 'flight',
@@ -50,7 +50,7 @@ describe('experience store', () => {
     expect(useExperienceStore.getState()).toMatchObject({
       stage: 'exterior',
       activeScene: 'exterior',
-      transition: { id, phase: 'handoff', progress: 0.9, handedOff: true },
+      transition: { id, phase: 'handoff', progress: 0.86, handedOff: true },
     })
 
     expect(useExperienceStore.getState().completeTransition(id!)).toBe(true)
@@ -77,7 +77,7 @@ describe('experience store', () => {
     expect(useExperienceStore.getState()).toMatchObject({
       stage: 'floor16',
       activeScene: 'interior',
-      transition: { id: entry, phase: 'handoff', progress: 0.5, handedOff: true },
+      transition: { id: entry, phase: 'handoff', progress: 0.44, handedOff: true },
     })
 
     expect(useExperienceStore.getState().setTransitionPhase(entry, 'reveal')).toBe(true)

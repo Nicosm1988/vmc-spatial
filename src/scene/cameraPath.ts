@@ -1,6 +1,5 @@
 import * as THREE from 'three'
 import type { CinematicRouteSpec, CinematicWaypointSpec } from '../domain/cinematicAccess'
-import type { ActiveScene } from '../domain/experience'
 import { mmToMeters } from '../domain/units'
 
 export interface CameraPathPose {
@@ -9,24 +8,28 @@ export interface CameraPathPose {
   readonly fovDeg: number
 }
 
-export interface ResolvedCameraWaypoint extends CameraPathPose {
+export interface ResolvedCameraKeyframe extends CameraPathPose {
   readonly id: string
-  readonly scene: ActiveScene
   readonly progress: number
+}
+
+export interface ResolvedCameraWaypoint extends ResolvedCameraKeyframe {
+  readonly positionTangent: THREE.Vector3
+  readonly lookAtTangent: THREE.Vector3
+  readonly fovTangent: number
 }
 
 export function clampCameraFrameDeltaMs(deltaSeconds: number) {
   if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return 0
-  return Math.min(deltaSeconds, 0.5) * 1000
+  return Math.min(deltaSeconds, 0.1) * 1000
 }
 
 export function resolveCameraWaypoint(
   waypoint: CinematicWaypointSpec,
   center: readonly [number, number, number],
-): ResolvedCameraWaypoint {
+): ResolvedCameraKeyframe {
   return {
     id: waypoint.id,
-    scene: waypoint.scene,
     progress: waypoint.progress,
     position: new THREE.Vector3(
       center[0] + mmToMeters(waypoint.positionMm.x),
@@ -42,57 +45,107 @@ export function resolveCameraWaypoint(
   }
 }
 
+function vectorTangent(
+  keyframes: readonly ResolvedCameraKeyframe[],
+  index: number,
+  pick: (keyframe: ResolvedCameraKeyframe) => THREE.Vector3,
+) {
+  if (index === 0 || index === keyframes.length - 1) return new THREE.Vector3()
+  const previous = keyframes[index - 1]
+  const next = keyframes[index + 1]
+  if (!previous || !next) return new THREE.Vector3()
+
+  const span = next.progress - previous.progress
+  if (span <= Number.EPSILON) return new THREE.Vector3()
+  return pick(next)
+    .clone()
+    .sub(pick(previous))
+    .multiplyScalar(1 / span)
+}
+
+function numberTangent(
+  keyframes: readonly ResolvedCameraKeyframe[],
+  index: number,
+  pick: (keyframe: ResolvedCameraKeyframe) => number,
+) {
+  if (index === 0 || index === keyframes.length - 1) return 0
+  const previous = keyframes[index - 1]
+  const next = keyframes[index + 1]
+  if (!previous || !next) return 0
+
+  const span = next.progress - previous.progress
+  return span <= Number.EPSILON ? 0 : (pick(next) - pick(previous)) / span
+}
+
+function resolveTangents(
+  keyframes: readonly ResolvedCameraKeyframe[],
+): readonly ResolvedCameraWaypoint[] {
+  return keyframes.map((keyframe, index) => ({
+    ...keyframe,
+    positionTangent: vectorTangent(keyframes, index, (item) => item.position),
+    lookAtTangent: vectorTangent(keyframes, index, (item) => item.lookAt),
+    fovTangent: numberTangent(keyframes, index, (item) => item.fovDeg),
+  }))
+}
+
 export function resolveCameraRoute(
   route: CinematicRouteSpec,
   center: readonly [number, number, number],
   currentPose?: CameraPathPose,
 ): readonly ResolvedCameraWaypoint[] {
-  const waypoints = route.waypoints.map((waypoint) => resolveCameraWaypoint(waypoint, center))
-  const first = waypoints[0]
-  if (!first || !currentPose) return waypoints
+  const keyframes = route.waypoints.map((waypoint) => resolveCameraWaypoint(waypoint, center))
+  const first = keyframes[0]
+  if (!first || !currentPose) return resolveTangents(keyframes)
 
-  waypoints[0] = {
+  keyframes[0] = {
     ...first,
     position: currentPose.position.clone(),
     lookAt: currentPose.lookAt.clone(),
     fovDeg: currentPose.fovDeg,
   }
-  return waypoints
+  return resolveTangents(keyframes)
 }
 
-function easeInOutCubic(value: number) {
-  return value < 0.5 ? 4 * value ** 3 : 1 - (-2 * value + 2) ** 3 / 2
-}
-
-function catmullRom(
-  p0: THREE.Vector3,
-  p1: THREE.Vector3,
-  p2: THREE.Vector3,
-  p3: THREE.Vector3,
-  t: number,
+function hermiteVector(
+  left: THREE.Vector3,
+  right: THREE.Vector3,
+  leftTangent: THREE.Vector3,
+  rightTangent: THREE.Vector3,
+  progress: number,
+  span: number,
 ) {
-  const t2 = t * t
-  const t3 = t2 * t
-  return new THREE.Vector3(
-    0.5 *
-      (2 * p1.x +
-        (-p0.x + p2.x) * t +
-        (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
-        (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-    0.5 *
-      (2 * p1.y +
-        (-p0.y + p2.y) * t +
-        (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
-        (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
-    0.5 *
-      (2 * p1.z +
-        (-p0.z + p2.z) * t +
-        (2 * p0.z - 5 * p1.z + 4 * p2.z - p3.z) * t2 +
-        (-p0.z + 3 * p1.z - 3 * p2.z + p3.z) * t3),
-  )
+  const squared = progress * progress
+  const cubed = squared * progress
+  const h00 = 2 * cubed - 3 * squared + 1
+  const h10 = cubed - 2 * squared + progress
+  const h01 = -2 * cubed + 3 * squared
+  const h11 = cubed - squared
+
+  return new THREE.Vector3()
+    .addScaledVector(left, h00)
+    .addScaledVector(leftTangent, h10 * span)
+    .addScaledVector(right, h01)
+    .addScaledVector(rightTangent, h11 * span)
 }
 
-function clonePose(waypoint: ResolvedCameraWaypoint): CameraPathPose {
+function hermiteNumber(
+  left: number,
+  right: number,
+  leftTangent: number,
+  rightTangent: number,
+  progress: number,
+  span: number,
+) {
+  const squared = progress * progress
+  const cubed = squared * progress
+  const h00 = 2 * cubed - 3 * squared + 1
+  const h10 = cubed - 2 * squared + progress
+  const h01 = -2 * cubed + 3 * squared
+  const h11 = cubed - squared
+  return h00 * left + h10 * span * leftTangent + h01 * right + h11 * span * rightTangent
+}
+
+function clonePose(waypoint: ResolvedCameraKeyframe): CameraPathPose {
   return {
     position: waypoint.position.clone(),
     lookAt: waypoint.lookAt.clone(),
@@ -101,47 +154,57 @@ function clonePose(waypoint: ResolvedCameraWaypoint): CameraPathPose {
 }
 
 /**
- * Samples only within one render scene. A route crossing coordinate frames
- * therefore holds the last source pose until handoff and starts exactly at the
- * first destination pose afterwards; it never interpolates through unrelated
- * frames.
+ * Samples a single C1-continuous world-space curve. The renderer may exchange
+ * scene ownership at handoff, but the camera pose comes from this same curve on
+ * both sides of that state change.
  */
 export function sampleCameraRoute(
   waypoints: readonly ResolvedCameraWaypoint[],
-  scene: ActiveScene,
   progress: number,
 ): CameraPathPose | null {
-  const sceneWaypoints = waypoints.filter((waypoint) => waypoint.scene === scene)
-  const first = sceneWaypoints[0]
-  const last = sceneWaypoints.at(-1)
+  const first = waypoints[0]
+  const last = waypoints.at(-1)
   if (!first || !last) return null
 
   const clampedProgress = THREE.MathUtils.clamp(progress, 0, 1)
   if (clampedProgress <= first.progress) return clonePose(first)
   if (clampedProgress >= last.progress) return clonePose(last)
 
-  const rightIndex = sceneWaypoints.findIndex((waypoint) => waypoint.progress >= clampedProgress)
+  const rightIndex = waypoints.findIndex((waypoint) => waypoint.progress >= clampedProgress)
   if (rightIndex <= 0) return clonePose(first)
 
   const leftIndex = rightIndex - 1
-  const left = sceneWaypoints[leftIndex]
-  const right = sceneWaypoints[rightIndex]
+  const left = waypoints[leftIndex]
+  const right = waypoints[rightIndex]
   if (!left || !right) return clonePose(last)
 
-  const previous = sceneWaypoints[Math.max(0, leftIndex - 1)] ?? left
-  const next = sceneWaypoints[Math.min(sceneWaypoints.length - 1, rightIndex + 1)] ?? right
   const span = Math.max(Number.EPSILON, right.progress - left.progress)
-  const localProgress = easeInOutCubic((clampedProgress - left.progress) / span)
+  const localProgress = (clampedProgress - left.progress) / span
 
   return {
-    position: catmullRom(
-      previous.position,
+    position: hermiteVector(
       left.position,
       right.position,
-      next.position,
+      left.positionTangent,
+      right.positionTangent,
       localProgress,
+      span,
     ),
-    lookAt: catmullRom(previous.lookAt, left.lookAt, right.lookAt, next.lookAt, localProgress),
-    fovDeg: THREE.MathUtils.lerp(left.fovDeg, right.fovDeg, localProgress),
+    lookAt: hermiteVector(
+      left.lookAt,
+      right.lookAt,
+      left.lookAtTangent,
+      right.lookAtTangent,
+      localProgress,
+      span,
+    ),
+    fovDeg: hermiteNumber(
+      left.fovDeg,
+      right.fovDeg,
+      left.fovTangent,
+      right.fovTangent,
+      localProgress,
+      span,
+    ),
   }
 }

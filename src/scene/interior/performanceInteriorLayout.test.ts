@@ -1,32 +1,75 @@
 import { VMC_PISO_16 } from '../../data/vmcPiso16'
+import type { Zone } from '../../types'
 import {
   buildPerformanceInteriorLayout,
   countPerformanceInstances,
+  PRESENTATION_CEILING_ID,
+  PRESENTATION_ENVELOPE_ID,
   type PerformanceInstance,
 } from './performanceInteriorLayout'
 
+function worldFromZone(zone: Zone, localX: number, localZ: number) {
+  const rotation = -(zone.rot ?? 0)
+  const cosine = Math.cos(rotation)
+  const sine = Math.sin(rotation)
+  return [
+    zone.cx / 1000 + localX * cosine + localZ * sine,
+    zone.cy / 1000 - localX * sine + localZ * cosine,
+  ] as const
+}
+
+function expectPosition(
+  placement: PerformanceInstance | undefined,
+  expected: readonly [number, number, number],
+) {
+  expect(placement).toBeDefined()
+  placement?.position.forEach((value, index) => {
+    expect(value).toBeCloseTo(expected[index]!, 6)
+  })
+}
+
 describe('performance interior layout', () => {
-  it('batches the presentation inventory while retaining source ownership', () => {
+  it('retains the detailed renderer inventory with stable source ownership', () => {
     const layout = buildPerformanceInteriorLayout(VMC_PISO_16, 'none')
     const validOwners = new Set([
       ...VMC_PISO_16.zonas.map((zone) => zone.id),
       ...VMC_PISO_16.videoWalls.map((wall) => wall.id),
-      'demo-presentation-envelope',
+      PRESENTATION_ENVELOPE_ID,
+      PRESENTATION_CEILING_ID,
     ])
+    const benches = VMC_PISO_16.zonas.filter((zone) => zone.kind === 'bench')
+    const roundTables = VMC_PISO_16.zonas.filter((zone) => zone.kind === 'circular')
+    const diningTables = VMC_PISO_16.zonas.filter((zone) => zone.kind === 'comedor')
+    const offices = VMC_PISO_16.zonas.filter((zone) => zone.kind === 'oficina')
+    const workstationCount = benches.reduce((total, zone) => total + (zone.pairs ?? 3) * 2, 0)
+    const chairCount =
+      workstationCount + roundTables.length * 5 + diningTables.length * 8 + offices.length
+    const videoScreenCount = VMC_PISO_16.videoWalls.reduce(
+      (total, wall) => total + wall.pantallas,
+      0,
+    )
 
-    expect(layout.videoWallScreens).toHaveLength(
-      VMC_PISO_16.videoWalls.reduce((total, wall) => total + wall.pantallas, 0),
-    )
-    expect(layout.monitorBodies).toHaveLength(
-      VMC_PISO_16.zonas
-        .filter((zone) => zone.kind === 'bench')
-        .reduce((total, zone) => total + (zone.pairs ?? 3) * 2, 0),
-    )
-    expect(layout.windowGlass.length).toBeLessThanOrEqual(36)
-    expect(layout.chairSeats).toHaveLength(184)
-    expect(layout.chairBacks).toHaveLength(184)
-    expect(layout.monitorBodies).toHaveLength(130)
-    expect(countPerformanceInstances(layout)).toBe(982)
+    expect(layout.windowGlass).toHaveLength(30)
+    expect(layout.windowShades).toHaveLength(30)
+    expect(layout.windowShadeCassettes).toHaveLength(30)
+    expect(layout.videoWallShells).toHaveLength(VMC_PISO_16.videoWalls.length)
+    expect(layout.videoWallCabinets).toHaveLength(VMC_PISO_16.videoWalls.length)
+    expect(layout.videoWallScreens).toHaveLength(videoScreenCount)
+    expect(layout.videoWallBezels).toHaveLength(videoScreenCount)
+    expect(layout.tableTops).toHaveLength(benches.length * 2 + diningTables.length + offices.length)
+    expect(layout.tableBases).toHaveLength(benches.length * 2)
+    expect(layout.tableLegs).toHaveLength(diningTables.length * 4)
+    expect(layout.monitorFrames).toHaveLength(workstationCount + offices.length)
+    expect(layout.monitorScreens).toHaveLength(workstationCount + offices.length)
+    expect(layout.chairSeats).toHaveLength(chairCount)
+    expect(layout.chairBackMesh).toHaveLength(chairCount)
+    expect(layout.chairBackFrames).toHaveLength(chairCount * 7)
+    expect(layout.chairArmrests).toHaveLength(chairCount * 4)
+    expect(layout.chairSpokes).toHaveLength(chairCount * 5)
+    expect(layout.chairCasters).toHaveLength(chairCount * 5)
+    expect(layout.ceilingPanels.length).toBeGreaterThan(0)
+    expect(layout.ceilingLights.length).toBeGreaterThan(0)
+    expect(countPerformanceInstances(layout)).toBeGreaterThan(982)
 
     const ids = Object.values(layout).flatMap((placements) =>
       placements.map((placement: PerformanceInstance) => placement.id),
@@ -38,6 +81,58 @@ describe('performance interior layout', () => {
         expect(validOwners.has(placement.ownerId)).toBe(true)
         expect(placement.id.startsWith(`${placement.ownerId}:`)).toBe(true)
       }
+    }
+  })
+
+  it('reproduces DeskBench side offsets and orientations from the detailed renderer', () => {
+    const layout = buildPerformanceInteriorLayout(VMC_PISO_16, 'none')
+    const zone = VMC_PISO_16.zonas.find((candidate) => candidate.id === 'cl1')!
+    const rotation = -(zone.rot ?? 0)
+    const benchLength = (zone.pairs ?? 3) * 1.6
+    const firstX = -benchLength / 2 + 0.8
+    const [negativeTopX, negativeTopZ] = worldFromZone(zone, 0, -0.46)
+    const [positiveTopX, positiveTopZ] = worldFromZone(zone, 0, 0.46)
+    const negativeTop = layout.tableTops.find((item) => item.id === 'cl1:bench-top:0')
+    const positiveTop = layout.tableTops.find((item) => item.id === 'cl1:bench-top:1')
+
+    expectPosition(negativeTop, [negativeTopX, 0.74, negativeTopZ])
+    expectPosition(positiveTop, [positiveTopX, 0.74, positiveTopZ])
+    expect(negativeTop?.scale).toEqual([benchLength, 0.05, 0.86])
+    expect(negativeTop?.rotation[1]).toBeCloseTo(rotation, 8)
+
+    const [negativeMonitorX, negativeMonitorZ] = worldFromZone(zone, firstX, -0.21)
+    const [positiveMonitorX, positiveMonitorZ] = worldFromZone(zone, firstX, 0.21)
+    const negativeMonitor = layout.monitorFrames.find((item) => item.id === 'cl1:monitor-frame:0')
+    const positiveMonitor = layout.monitorFrames.find((item) => item.id === 'cl1:monitor-frame:1')
+    expectPosition(negativeMonitor, [negativeMonitorX, 1.02, negativeMonitorZ])
+    expectPosition(positiveMonitor, [positiveMonitorX, 1.02, positiveMonitorZ])
+    expect(negativeMonitor?.rotation[1]).toBeCloseTo(rotation + Math.PI, 8)
+    expect(positiveMonitor?.rotation[1]).toBeCloseTo(rotation, 8)
+
+    // Seat centers include the original chair-local z=0.02 offset after side rotation.
+    const [negativeChairX, negativeChairZ] = worldFromZone(zone, firstX, -1.36)
+    const [positiveChairX, positiveChairZ] = worldFromZone(zone, firstX, 1.36)
+    const negativeChair = layout.chairSeats.find((item) => item.id === 'cl1:chair-seat:0')
+    const positiveChair = layout.chairSeats.find((item) => item.id === 'cl1:chair-seat:1')
+    expectPosition(negativeChair, [negativeChairX, 0.49, negativeChairZ])
+    expectPosition(positiveChair, [positiveChairX, 0.49, positiveChairZ])
+    expect(negativeChair?.rotation[1]).toBeCloseTo(rotation + Math.PI, 8)
+    expect(positiveChair?.rotation[1]).toBeCloseTo(rotation, 8)
+  })
+
+  it('keeps the original central videowall dimensions and modular screen counts', () => {
+    const layout = buildPerformanceInteriorLayout(VMC_PISO_16, 'none')
+    for (const wall of VMC_PISO_16.videoWalls) {
+      const shell = layout.videoWallShells.find((item) => item.ownerId === wall.id)
+      const expectedLength = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1) / 1000
+      expect(shell?.position[0]).toBeCloseTo((wall.x1 + wall.x2) / 2000, 8)
+      expect(shell?.position[1]).toBe(1.55)
+      expect(shell?.position[2]).toBeCloseTo((wall.y1 + wall.y2) / 2000, 8)
+      expect(shell?.scale[0]).toBeCloseTo(expectedLength, 8)
+      expect(shell?.scale.slice(1)).toEqual([3.1, 0.14])
+      expect(layout.videoWallScreens.filter((item) => item.ownerId === wall.id)).toHaveLength(
+        wall.pantallas,
+      )
     }
   })
 
@@ -56,12 +151,15 @@ describe('performance interior layout', () => {
     expect(JSON.stringify(VMC_PISO_16)).toBe(before)
   })
 
-  it('changes zone accents for insights without changing stable instance IDs', () => {
+  it('changes insight accents and screens without changing stable instance IDs', () => {
     const base = buildPerformanceInteriorLayout(VMC_PISO_16, 'none')
     const occupied = buildPerformanceInteriorLayout(VMC_PISO_16, 'ocupacion')
 
     expect(occupied.accentPads.map((placement) => placement.id)).toEqual(
       base.accentPads.map((placement) => placement.id),
+    )
+    expect(occupied.monitorScreens.map((placement) => placement.id)).toEqual(
+      base.monitorScreens.map((placement) => placement.id),
     )
     expect(occupied.accentPads.map((placement) => placement.color)).not.toEqual(
       base.accentPads.map((placement) => placement.color),

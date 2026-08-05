@@ -16,8 +16,8 @@ import type { CamApi, OrbitControlsHandle } from '../scene/cameraTypes'
 import SceneMetrics from '../scene/SceneMetrics'
 import { EXTERIOR_DEMO_SPEC } from '../domain/exteriorSpec'
 import { mmToMeters } from '../domain/units'
-import { AccessPortal } from '../scene/exterior/AccessPortal'
 import PerformanceInterior from '../scene/interior/PerformanceInterior'
+import ProceduralEnvironment from '../scene/ProceduralEnvironment'
 
 const CinematicEffects = lazy(() => import('../scene/CinematicEffects'))
 
@@ -99,13 +99,17 @@ export default function Scene3D({
   const drag = useRef<{ id: string; obj: THREE.Object3D } | null>(null)
   const stage = useExperienceStore((state) => state.stage)
   const activeScene = useExperienceStore((state) => state.activeScene)
-  const showAccessPortal = useExperienceStore(
-    (state) => state.stage === 'floor16' || state.transition !== null,
+  const transitionTouchesInterior = useExperienceStore(
+    (state) =>
+      state.transition !== null &&
+      (state.transition.from === 'interior' || state.transition.to === 'interior'),
   )
   const night = useExperienceStore((state) => state.night)
   const quality = useExperienceStore((state) => state.resolvedQuality)
   const profile = QUALITY_PROFILES[quality]
   const isInterior = activeScene === 'interior'
+  const showExterior = activeScene === 'exterior' || transitionTouchesInterior
+  const showInterior = activeScene === 'interior' || transitionTouchesInterior
   const diagnosticsEnabled = useMemo(
     () => new URLSearchParams(window.location.search).get('diagnostics') === '1',
     [],
@@ -121,6 +125,11 @@ export default function Scene3D({
     () => [centerX, 0, centerZ],
     [centerX, centerZ],
   )
+  const daylightTarget = useMemo(() => {
+    const target = new THREE.Object3D()
+    target.position.set(centerX, 0, centerZ)
+    return target
+  }, [centerX, centerZ])
   const insightDefinition = INSIGHTS[insight]
   const coreCenterX = doc.core.reduce((sum, point) => sum + point.x, 0) / doc.core.length
   const coreCenterY = doc.core.reduce((sum, point) => sum + point.y, 0) / doc.core.length
@@ -243,7 +252,7 @@ export default function Scene3D({
         antialias: !profile.postprocessing,
         powerPreference: 'high-performance',
         toneMapping: THREE.ACESFilmicToneMapping,
-        toneMappingExposure: night ? 1.12 : 1.02,
+        toneMappingExposure: night ? 1.02 : 0.9,
         preserveDrawingBuffer: true,
       }}
       onPointerMissed={() => onSelect(null)}
@@ -264,46 +273,70 @@ export default function Scene3D({
         attach="fog"
         args={[night ? '#08111d' : '#bcd2e6', isInterior ? 180 : 300, isInterior ? 520 : 1050]}
       />
-      <hemisphereLight args={[night ? '#355579' : '#f0f6ff', '#27362f', night ? 0.72 : 1.05]} />
-      <ambientLight intensity={night ? 0.4 : 0.32} />
+      <hemisphereLight
+        args={[
+          night ? '#355579' : '#f0f6ff',
+          '#27362f',
+          isInterior ? (night ? 0.48 : 0.58) : night ? 0.72 : 1.05,
+        ]}
+      />
+      <ambientLight intensity={isInterior ? (night ? 0.24 : 0.18) : night ? 0.4 : 0.32} />
+      <primitive object={daylightTarget} />
       <directionalLight
         position={[centerX + 100, 150, centerZ - 50]}
-        intensity={night ? 0.9 : 2.15}
+        target={daylightTarget}
+        intensity={isInterior ? (night ? 0.62 : 1.28) : night ? 0.9 : 2.15}
         color={night ? '#9fb4e0' : '#fff3e0'}
         castShadow={profile.shadows}
         shadow-mapSize-width={profile.shadowMapSize}
         shadow-mapSize-height={profile.shadowMapSize}
         shadow-bias={-0.0004}
+        shadow-normalBias={0.025}
       >
-        <orthographicCamera attach="shadow-camera" args={[-100, 100, 100, -100, 0.1, 520]} />
+        <orthographicCamera
+          attach="shadow-camera"
+          args={isInterior ? [-48, 48, 42, -42, 0.1, 240] : [-100, 100, 100, -100, 0.1, 520]}
+        />
       </directionalLight>
       <directionalLight
         position={[centerX - 130, 96, centerZ + 190]}
-        intensity={night ? 0.55 : 0.82}
+        target={daylightTarget}
+        intensity={isInterior ? (night ? 0.3 : 0.42) : night ? 0.55 : 0.82}
         color={night ? '#496582' : '#d9edff'}
       />
 
-      {!isInterior ? (
+      {showInterior ? <ProceduralEnvironment /> : null}
+      <Entorno centerX={centerX} centerZ={centerZ} noche={night} detail={profile.exteriorDetail} />
+      {showExterior ? (
         <group>
-          <Entorno
-            centerX={centerX}
-            centerZ={centerZ}
-            noche={night}
-            detail={profile.exteriorDetail}
-          />
           <TorreYPF
             centerX={centerX}
             centerZ={centerZ}
             noche={night}
             detail={profile.exteriorDetail}
           />
-          {showAccessPortal ? (
-            <AccessPortal centerX={centerX} centerZ={centerZ} night={night} />
-          ) : null}
         </group>
-      ) : !editing ? (
+      ) : null}
+      {showInterior && !editing ? (
         <PerformanceInterior doc={doc} night={night} insight={insight} roof={techo} />
-      ) : (
+      ) : null}
+      {isInterior &&
+      !transitionTouchesInterior &&
+      !editing &&
+      profile.contactShadowResolution > 0 ? (
+        <ContactShadows
+          key="stable-interior-contact-shadows"
+          position={[centerX, 0.025, centerZ]}
+          scale={[68, 48]}
+          blur={2.2}
+          opacity={night ? 0.38 : 0.3}
+          far={4.5}
+          frames={1}
+          resolution={profile.contactShadowResolution}
+          color="#111820"
+        />
+      ) : null}
+      {showInterior && editing ? (
         <group>
           <mesh
             geometry={floorGeometry}
@@ -497,7 +530,7 @@ export default function Scene3D({
             />
           ) : null}
         </group>
-      )}
+      ) : null}
 
       <OrbitControls
         ref={controls}

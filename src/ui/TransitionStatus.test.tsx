@@ -1,9 +1,7 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CINEMATIC_PHASE_LABELS } from '../domain/cinematicAccess'
 import { useExperienceStore } from '../state/useExperienceStore'
-import CinematicHandoff from './CinematicHandoff'
 import TransitionStatus from './TransitionStatus'
 
 function resetExperience() {
@@ -33,7 +31,7 @@ describe('TransitionStatus', () => {
     expect(screen.queryByLabelText('Estado del recorrido cinematográfico')).not.toBeInTheDocument()
   })
 
-  it('expone fase, destino, progreso real y cancelación por teclado', async () => {
+  it('expone un único plano secuencia, destino, progreso y cancelación', async () => {
     const user = userEvent.setup()
     const transition = startFloor16Transition()
     const cancelTransition = vi.fn()
@@ -45,25 +43,23 @@ describe('TransitionStatus', () => {
 
     render(<TransitionStatus />)
 
-    expect(screen.getByText('DEMO / NO VERIFICADO')).toBeVisible()
-    expect(screen.getAllByText(CINEMATIC_PHASE_LABELS.flight)[0]).toBeVisible()
-    expect(screen.getByText(/Destino · Fachada · Piso 16/)).toBeVisible()
+    const panel = screen.getByLabelText('Estado del recorrido cinematográfico')
+    expect(panel).toHaveAttribute('data-transition-style', 'continuous')
+    expect(screen.getByText('Plano secuencia')).toBeVisible()
+    expect(screen.getByText(/Hacia Fachada · Piso 16/)).toBeVisible()
     expect(screen.getByRole('progressbar')).toHaveValue(37)
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', '37%')
-    expect(screen.getByRole('status')).toHaveTextContent(CINEMATIC_PHASE_LABELS.flight)
+    expect(screen.getByRole('status')).toHaveTextContent('Recorrido continuo')
 
-    const cancel = screen.getByRole('button', { name: 'Cancelar recorrido' })
+    const cancel = screen.getByRole('button', { name: 'Salir' })
     expect(cancel).toHaveAttribute('aria-keyshortcuts', 'Escape')
     await user.click(cancel)
     expect(cancelTransition).toHaveBeenCalledOnce()
   })
 
-  it('actualiza el anuncio al cambiar de fase sin convertir el overlay en modal', () => {
+  it('actualiza el avance sin presentar etapas visuales separadas', () => {
     const transition = startFloor16Transition()
     render(<TransitionStatus />)
-
-    const panel = screen.getByLabelText('Estado del recorrido cinematográfico')
-    expect(panel).not.toHaveAttribute('role', 'dialog')
 
     act(() => {
       useExperienceStore.setState({
@@ -71,43 +67,7 @@ describe('TransitionStatus', () => {
       })
     })
 
-    expect(panel).toHaveAttribute('data-phase', 'handoff')
-    expect(screen.getByRole('status')).toHaveTextContent(CINEMATIC_PHASE_LABELS.handoff)
     expect(screen.getByRole('progressbar')).toHaveValue(78)
-  })
-})
-
-describe('CinematicHandoff', () => {
-  beforeEach(() => {
-    localStorage.clear()
-    resetExperience()
-  })
-
-  afterEach(() => {
-    cleanup()
-  })
-
-  it('cubre el cambio de escena únicamente durante cover, handoff y reveal', () => {
-    const transition = startFloor16Transition()
-    render(<CinematicHandoff />)
-
-    expect(screen.queryByTestId('cinematic-handoff')).not.toBeInTheDocument()
-
-    for (const phase of ['cover', 'handoff', 'reveal'] as const) {
-      act(() => {
-        useExperienceStore.setState({ transition: { ...transition, phase }, reducedMotion: true })
-      })
-
-      expect(screen.getByTestId('cinematic-handoff')).toHaveAttribute('data-phase', phase)
-      expect(screen.getByTestId('cinematic-handoff')).toHaveClass(
-        `cinematic-handoff--${phase}`,
-        'cinematic-handoff--reduced-motion',
-      )
-    }
-
-    act(() => {
-      useExperienceStore.setState({ transition: null })
-    })
-    expect(screen.queryByTestId('cinematic-handoff')).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Etapas del recorrido' })).not.toBeInTheDocument()
   })
 })

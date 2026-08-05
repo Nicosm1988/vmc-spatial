@@ -60,14 +60,6 @@ export interface ExteriorLodSpec {
   readonly midMaxDistanceMm: number
 }
 
-export interface ExteriorAccessPortalSpec {
-  readonly id: string
-  readonly classification: 'conceptual'
-  readonly sizeMm: Size3Mm
-  readonly frameThicknessMm: number
-  readonly rotationRad: number
-}
-
 export interface ExteriorDemoSpec {
   readonly id: string
   readonly status: 'demo-unverified'
@@ -76,8 +68,6 @@ export interface ExteriorDemoSpec {
   readonly heightMm: number
   readonly floorCount: number
   readonly floor16ElevationMm: number
-  readonly demoEntryAnchorMm: Point3Mm
-  readonly demoEntryPortal: ExteriorAccessPortalSpec
   readonly massing: readonly ExteriorMassingSpec[]
   readonly garden: ExteriorGardenSpec
   readonly site: ExteriorSiteSpec
@@ -100,14 +90,6 @@ export const EXTERIOR_DEMO_SPEC: ExteriorDemoSpec = deepFreeze({
   heightMm: 160_000,
   floorCount: 36,
   floor16ElevationMm: 0,
-  demoEntryAnchorMm: { x: -36_000, y: 36_000, elevation: 1_400 },
-  demoEntryPortal: {
-    id: 'demo-unverified-floor16-access-portal',
-    classification: 'conceptual',
-    sizeMm: { width: 4_200, depth: 160, height: 2_800 },
-    frameThicknessMm: 140,
-    rotationRad: -Math.PI / 4,
-  },
   massing: [
     {
       id: 'city-square',
@@ -276,25 +258,6 @@ export function validateExteriorSpec(spec: ExteriorDemoSpec): string[] {
     errors.push('floorCount must be a positive integer')
   }
   addIntegerMmError(errors, spec.floor16ElevationMm, 'floor16ElevationMm')
-  validatePoint3(errors, spec.demoEntryAnchorMm, 'demoEntryAnchorMm')
-  registerId(spec.demoEntryPortal.id, 'demoEntryPortal.id')
-  if (spec.demoEntryPortal.classification !== 'conceptual') {
-    errors.push('demoEntryPortal.classification must be conceptual')
-  }
-  validateSize(errors, spec.demoEntryPortal.sizeMm, 'demoEntryPortal.sizeMm')
-  addIntegerMmError(
-    errors,
-    spec.demoEntryPortal.frameThicknessMm,
-    'demoEntryPortal.frameThicknessMm',
-    true,
-  )
-  if (
-    spec.demoEntryPortal.frameThicknessMm * 2 >=
-    Math.min(spec.demoEntryPortal.sizeMm.width, spec.demoEntryPortal.sizeMm.height)
-  ) {
-    errors.push('demoEntryPortal.frameThicknessMm must leave a positive inner opening')
-  }
-  validateRotation(errors, spec.demoEntryPortal.rotationRad, 'demoEntryPortal.rotationRad')
 
   if (spec.massing.length !== 2) errors.push('massing must contain exactly two volumes')
   const massingKinds = new Set<ExteriorMassingSpec['kind']>()
