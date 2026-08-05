@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { getCinematicRoute } from '../domain/cinematicAccess'
+import { CINEMATIC_ACCESS_ROUTES, getCinematicRoute } from '../domain/cinematicAccess'
 import { clampCameraFrameDeltaMs, resolveCameraRoute, sampleCameraRoute } from './cameraPath'
 
 describe('cinematic camera path adapter', () => {
   it('keeps low-FPS progress while capping long background resumes', () => {
     expect(clampCameraFrameDeltaMs(1 / 60)).toBeCloseTo(16.67, 1)
-    expect(clampCameraFrameDeltaMs(0.4)).toBe(400)
-    expect(clampCameraFrameDeltaMs(8)).toBe(500)
+    expect(clampCameraFrameDeltaMs(0.4)).toBe(100)
+    expect(clampCameraFrameDeltaMs(8)).toBe(100)
     expect(clampCameraFrameDeltaMs(Number.NaN)).toBe(0)
   })
 
@@ -40,18 +40,36 @@ describe('cinematic camera path adapter', () => {
     expect(route.waypoints[0]?.positionMm.x).toBe(originalX)
   })
 
-  it('never interpolates between exterior and interior coordinate frames', () => {
+  it('keeps a continuous pose and tangent across renderer handoff', () => {
     const route = getCinematicRoute('floor16', 'interior')
     expect(route).not.toBeNull()
     if (!route) return
 
     const waypoints = resolveCameraRoute(route, [31, 0, 20])
-    const before = sampleCameraRoute(waypoints, 'exterior', route.handoffProgress - 0.001)
-    const after = sampleCameraRoute(waypoints, 'interior', route.handoffProgress)
+    const epsilon = 0.001
+    const before = sampleCameraRoute(waypoints, route.handoffProgress - epsilon)
+    const atHandoff = sampleCameraRoute(waypoints, route.handoffProgress)
+    const after = sampleCameraRoute(waypoints, route.handoffProgress + epsilon)
 
-    expect(before?.position.toArray()).toEqual([-11, 2.5, 67])
-    expect(after?.position.toArray()).toEqual([23.5, 2.4, 30.5])
-    expect(before?.position.distanceTo(after?.position ?? new THREE.Vector3())).toBeGreaterThan(30)
+    expect(atHandoff?.position.toArray()).toEqual([17, 2.4, 34.2])
+    expect(atHandoff?.lookAt.toArray()).toEqual([14, 1.2, 23])
+    expect(before?.position.distanceTo(after?.position ?? new THREE.Vector3())).toBeLessThan(0.2)
+
+    const incoming = atHandoff?.position.clone().sub(before?.position ?? new THREE.Vector3())
+    const outgoing = after?.position.clone().sub(atHandoff?.position ?? new THREE.Vector3())
+    expect(incoming?.length()).toBeGreaterThan(0)
+    expect(outgoing?.length()).toBeGreaterThan(0)
+    expect(incoming?.angleTo(outgoing ?? new THREE.Vector3())).toBeLessThan(0.02)
+
+    const oneFrame = 1000 / 60 / route.durationMs
+    const previousFrame = sampleCameraRoute(waypoints, route.handoffProgress - oneFrame)
+    const nextFrame = sampleCameraRoute(waypoints, route.handoffProgress + oneFrame)
+    expect(
+      previousFrame?.position.distanceTo(atHandoff?.position ?? new THREE.Vector3()),
+    ).toBeLessThan(0.5)
+    expect(atHandoff?.position.distanceTo(nextFrame?.position ?? new THREE.Vector3())).toBeLessThan(
+      0.5,
+    )
   })
 
   it('returns finite curved samples with exact scene endpoints', () => {
@@ -61,7 +79,7 @@ describe('cinematic camera path adapter', () => {
 
     const waypoints = resolveCameraRoute(route, [31, 0, 20])
     const samples = Array.from({ length: 101 }, (_, index) =>
-      sampleCameraRoute(waypoints, 'exterior', index / 100),
+      sampleCameraRoute(waypoints, index / 100),
     )
 
     expect(samples.every(Boolean)).toBe(true)
@@ -75,6 +93,53 @@ describe('cinematic camera path adapter', () => {
       ),
     ).toBe(true)
     expect(samples[0]?.position.toArray()).toEqual([-119.4, 78.4, 240])
-    expect(samples.at(-1)?.position.toArray()).toEqual([-81.8, 12, 161.6])
+    expect(samples.at(-1)?.position.toArray()).toEqual([13, 6, 50])
+  })
+
+  it('moves through internal waypoints without the per-segment stop from eased lerps', () => {
+    const route = getCinematicRoute('exterior', 'interior')
+    expect(route).not.toBeNull()
+    if (!route) return
+
+    const waypoints = resolveCameraRoute(route, [31, 0, 20])
+    const internal = route.waypoints.slice(1, -1)
+
+    for (const waypoint of internal) {
+      const before = sampleCameraRoute(waypoints, waypoint.progress - 0.0005)
+      const atWaypoint = sampleCameraRoute(waypoints, waypoint.progress)
+      const after = sampleCameraRoute(waypoints, waypoint.progress + 0.0005)
+      expect(before).not.toBeNull()
+      expect(atWaypoint).not.toBeNull()
+      expect(after).not.toBeNull()
+      expect(
+        before?.position.distanceTo(atWaypoint?.position ?? new THREE.Vector3()),
+      ).toBeGreaterThan(0)
+      expect(
+        atWaypoint?.position.distanceTo(after?.position ?? new THREE.Vector3()),
+      ).toBeGreaterThan(0)
+    }
+  })
+
+  it('limits every cross-scene handoff to less than half a meter per 60 Hz frame', () => {
+    const crossingRoutes = CINEMATIC_ACCESS_ROUTES.filter(
+      (route) => route.fromActiveScene !== route.toActiveScene,
+    )
+
+    for (const route of crossingRoutes) {
+      const waypoints = resolveCameraRoute(route, [31, 0, 20])
+      const oneFrame = 1000 / 60 / route.durationMs
+      const before = sampleCameraRoute(waypoints, route.handoffProgress - oneFrame)
+      const atHandoff = sampleCameraRoute(waypoints, route.handoffProgress)
+      const after = sampleCameraRoute(waypoints, route.handoffProgress + oneFrame)
+
+      expect(
+        before?.position.distanceTo(atHandoff?.position ?? new THREE.Vector3()),
+        `${route.id} before handoff`,
+      ).toBeLessThan(0.5)
+      expect(
+        atHandoff?.position.distanceTo(after?.position ?? new THREE.Vector3()),
+        `${route.id} after handoff`,
+      ).toBeLessThan(0.5)
+    }
   })
 })

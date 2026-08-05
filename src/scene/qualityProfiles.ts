@@ -48,7 +48,6 @@ export function resolveQuality(
   hints: DeviceHints = {},
 ): ResolvedQuality {
   if (preference !== 'auto') return preference
-  if (hints.reducedMotion) return 'performance'
 
   const cores = hints.hardwareConcurrency ?? 4
   const memory = hints.deviceMemory ?? 4

@@ -15,14 +15,14 @@ describe('quality profile resolution', () => {
     },
   )
 
-  it('uses performance for auto when reduced motion is requested', () => {
+  it('keeps motion accessibility independent from raster quality', () => {
     expect(
       resolveQuality('auto', {
         hardwareConcurrency: 16,
         deviceMemory: 16,
         reducedMotion: true,
       }),
-    ).toBe('performance')
+    ).toBe('balanced')
   })
 
   it('uses balanced for capable devices in auto mode', () => {

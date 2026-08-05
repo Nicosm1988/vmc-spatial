@@ -1,0 +1,57 @@
+{
+  "classification": "DEMO / NO VERIFICADO",
+  "capturedAt": "2026-08-04T21:44:57-03:00",
+  "sourceRevision": "agent/phase-3-continuity-fidelity",
+  "browser": "Chromium 151.0.0.0",
+  "renderer": "ANGLE (AMD Radeon Graphics, radeonsi renoir ACO, OpenGL ES 3.2)",
+  "hardwareConcurrency": 16,
+  "deviceMemoryGb": 16,
+  "profile": "balanced",
+  "mode": "day",
+  "roof": true,
+  "viewportCssPx": {
+    "width": 921,
+    "height": 886
+  },
+  "devicePixelRatio": 1,
+  "stableStages": {
+    "exterior": {
+      "calls": 28,
+      "triangles": 12234,
+      "geometries": 20,
+      "textures": 3
+    },
+    "floor16": {
+      "calls": 22,
+      "triangles": 11546,
+      "geometries": 22,
+      "textures": 3
+    },
+    "interior": {
+      "calls": 55,
+      "triangles": 171640,
+      "geometries": 45,
+      "textures": 15
+    }
+  },
+  "continuousRoutes": {
+    "exteriorFloor16": {
+      "maxCalls": 28,
+      "maxTriangles": 12234
+    },
+    "floor16Interior": {
+      "maxCalls": 64,
+      "maxTriangles": 172942
+    }
+  },
+  "oneFrameContactShadowBake": {
+    "maxCalls": 111,
+    "maxTriangles": 342354,
+    "note": "Offscreen depth and blur passes measured once after the interior becomes stable; not visible scene geometry and not part of the continuous route peak."
+  },
+  "limitations": [
+    "No FPS claim is inferred from renderer counters.",
+    "Results apply only to this browser, GPU, viewport and quality profile.",
+    "All geometry, camera coordinates and inventory remain DEMO / NO VERIFICADO."
+  ]
+}

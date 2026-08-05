@@ -30,8 +30,6 @@ interface ActiveTransition {
   readonly waypoints: readonly ResolvedCameraWaypoint[]
   elapsedMs: number
   publishElapsedMs: number
-  coverHoldMs: number
-  handoffHoldMs: number
   handedOff: boolean
 }
 
@@ -53,8 +51,6 @@ interface CameraDiagnosticsWindow extends Window {
   __VMC_CAMERA_DIAGNOSTICS__?: CameraDiagnosticsSnapshot
 }
 
-const COVER_HOLD_MS = 420
-const HANDOFF_HOLD_MS = 140
 const PROGRESS_PUBLISH_INTERVAL_MS = 80
 
 function getStableWaypoint(stage: StableSceneStage) {
@@ -92,19 +88,13 @@ function applyPose(camera: THREE.Camera, controls: OrbitControlsHandle, pose: Ca
   controls.update()
 }
 
-function coverProgress(route: CinematicRouteSpec) {
-  return (
-    route.waypoints.find((waypoint) => waypoint.phase === 'cover')?.progress ??
-    route.handoffProgress
-  )
-}
-
 function phaseAtProgress(route: CinematicRouteSpec, progress: number): CinematicTransitionPhase {
-  const coverAt = coverProgress(route)
-  if (progress < coverAt) return 'flight'
-  if (progress < route.handoffProgress) return 'cover'
-  if (progress === route.handoffProgress) return 'handoff'
-  return 'reveal'
+  let phase: CinematicTransitionPhase = 'flight'
+  for (const waypoint of route.waypoints) {
+    if (waypoint.progress > progress) break
+    phase = waypoint.phase
+  }
+  return phase
 }
 
 function finalPose(
@@ -141,7 +131,7 @@ export default function CameraDirector({ center, controlsRef, camApiRef }: Camer
     if (!controls) return
     const state = useExperienceStore.getState()
     const diagnosticsWindow = window as CameraDiagnosticsWindow
-    diagnosticsWindow.__VMC_CAMERA_DIAGNOSTICS__ = {
+    const snapshot: CameraDiagnosticsSnapshot = {
       transitionId: state.transition?.id ?? null,
       routeId: route?.id ?? null,
       phase,
@@ -154,6 +144,10 @@ export default function CameraDirector({ center, controlsRef, camApiRef }: Camer
       fovDeg: getCameraFov(camera),
       timestamp: performance.now(),
     }
+    diagnosticsWindow.__VMC_CAMERA_DIAGNOSTICS__ = snapshot
+    diagnosticsWindow.dispatchEvent(
+      new CustomEvent<CameraDiagnosticsSnapshot>('vmc-camera-diagnostics', { detail: snapshot }),
+    )
   }
 
   useEffect(() => {
@@ -196,8 +190,6 @@ export default function CameraDirector({ center, controlsRef, camApiRef }: Camer
       waypoints: resolveCameraRoute(route, center, currentPose),
       elapsedMs: transition.progress * route.durationMs,
       publishElapsedMs: PROGRESS_PUBLISH_INTERVAL_MS,
-      coverHoldMs: 0,
-      handoffHoldMs: 0,
       handedOff: transition.handedOff,
     }
     controls.enabled = false
@@ -322,68 +314,44 @@ export default function CameraDirector({ center, controlsRef, camApiRef }: Camer
       return
     }
 
-    // Cap long background-tab resumes without turning low-FPS devices into
-    // slow motion. A 500 ms ceiling keeps the route progressing on software
-    // WebGL while still preventing a multi-second suspension from skipping it.
+    // A hidden tab or stalled frame must not skip a visible section of the
+    // route. The 100 ms ceiling favors spatial continuity over wall-clock time.
     const deltaMs = clampCameraFrameDeltaMs(delta)
     transition.elapsedMs += deltaMs
     transition.publishElapsedMs += deltaMs
 
-    const changesRenderScene = transition.route.fromActiveScene !== transition.route.toActiveScene
-    const coverAt = coverProgress(transition.route)
-    let progress = Math.min(1, transition.elapsedMs / transition.route.durationMs)
-    let phase = phaseAtProgress(transition.route, progress)
-
-    if (changesRenderScene && !transition.handedOff && progress >= coverAt) {
-      transition.coverHoldMs += deltaMs
-      progress = coverAt
-      transition.elapsedMs = coverAt * transition.route.durationMs
-      phase = 'cover'
-
-      if (transition.coverHoldMs >= COVER_HOLD_MS) {
-        progress = transition.route.handoffProgress
-        transition.elapsedMs = transition.route.handoffProgress * transition.route.durationMs
-        phase = 'handoff'
-        transition.handedOff = handoffTransition(transition.id)
-      }
-    } else if (!transition.handedOff && progress >= transition.route.handoffProgress) {
-      phase = 'handoff'
-      transition.handedOff = handoffTransition(transition.id)
-    }
-
-    if (changesRenderScene && transition.handedOff) {
-      if (transition.handoffHoldMs < HANDOFF_HOLD_MS) {
-        transition.handoffHoldMs += deltaMs
-        progress = transition.route.handoffProgress
-        transition.elapsedMs = transition.route.handoffProgress * transition.route.durationMs
-        phase = 'handoff'
-      } else {
-        phase = 'reveal'
-      }
-    }
-
-    const scene = transition.handedOff
-      ? transition.route.toActiveScene
-      : transition.route.fromActiveScene
-    const pose = sampleCameraRoute(transition.waypoints, scene, progress)
+    const progress = Math.min(1, transition.elapsedMs / transition.route.durationMs)
+    const phase = phaseAtProgress(transition.route, progress)
+    const pose = sampleCameraRoute(transition.waypoints, progress)
     if (pose) applyPose(camera, controls, pose)
 
+    let didHandoff = false
+    if (!transition.handedOff && progress >= transition.route.handoffProgress) {
+      didHandoff = handoffTransition(transition.id)
+      if (!didHandoff) {
+        active.current = null
+        controls.enabled = true
+        return
+      }
+      transition.handedOff = true
+    }
+
     if (liveTransition.phase !== phase) setTransitionPhase(transition.id, phase)
+    // Diagnostics are opt-in and sample every rendered frame so continuity
+    // assertions compare adjacent camera poses instead of 80 ms UI updates.
+    publishDiagnostics(phase, progress, transition.route)
     if (
       transition.publishElapsedMs >= PROGRESS_PUBLISH_INTERVAL_MS ||
       progress >= 1 ||
-      progress === transition.route.handoffProgress
+      didHandoff
     ) {
       transition.publishElapsedMs = 0
       setTransitionProgress(transition.id, progress)
-      publishDiagnostics(phase, progress, transition.route)
     }
 
     if (progress < 1) return
     controls.enabled = true
     active.current = null
-    setTransitionProgress(transition.id, 1)
-    setTransitionPhase(transition.id, 'reveal')
     completeTransition(transition.id)
     publishDiagnostics('idle', 1, transition.route)
   })

@@ -1,7 +1,8 @@
-import type { InsightKey, Point, VmcDocument, Zone } from '../../types'
+import { mmToMeters } from '../../domain/units'
 import { heat, wallGeom } from '../../lib/geometry'
 import { INSIGHTS } from '../../lib/insights'
-import { mmToMeters } from '../../domain/units'
+import { pointInPolygon, scalePoly } from '../../lib/plate'
+import type { InsightKey, Point, VmcDocument, Zone } from '../../types'
 
 export type Vec3 = [number, number, number]
 
@@ -18,37 +19,105 @@ export interface PerformanceInteriorLayout {
   accentPads: PerformanceInstance[]
   windowGlass: PerformanceInstance[]
   windowFrames: PerformanceInstance[]
+  windowShades: PerformanceInstance[]
+  windowShadeCassettes: PerformanceInstance[]
   videoWallShells: PerformanceInstance[]
+  videoWallTrims: PerformanceInstance[]
+  videoWallCabinets: PerformanceInstance[]
+  videoWallBezels: PerformanceInstance[]
   videoWallScreens: PerformanceInstance[]
   tableTops: PerformanceInstance[]
+  tableBases: PerformanceInstance[]
   tableLegs: PerformanceInstance[]
   roundTableTops: PerformanceInstance[]
   roundPedestals: PerformanceInstance[]
   chairSeats: PerformanceInstance[]
-  chairBacks: PerformanceInstance[]
-  monitorBodies: PerformanceInstance[]
-  monitorStands: PerformanceInstance[]
+  chairBackFrames: PerformanceInstance[]
+  chairBackMesh: PerformanceInstance[]
+  chairArmrests: PerformanceInstance[]
+  chairStems: PerformanceInstance[]
+  chairSpokes: PerformanceInstance[]
+  chairCasters: PerformanceInstance[]
+  monitorFrames: PerformanceInstance[]
+  monitorScreens: PerformanceInstance[]
+  monitorStems: PerformanceInstance[]
+  monitorBases: PerformanceInstance[]
   officeGlass: PerformanceInstance[]
+  ceilingPanels: PerformanceInstance[]
+  ceilingLights: PerformanceInstance[]
 }
 
-const ENVELOPE_ID = 'demo-presentation-envelope'
-const MAX_WINDOW_SEGMENTS = 36
+export const PRESENTATION_ENVELOPE_ID = 'demo-presentation-envelope'
+export const PRESENTATION_CEILING_ID = 'demo-technical-ceiling'
+
+const WINDOW_SEGMENTS = 30
+const DESK_WIDTH = 1.6
+const DESK_DEPTH = 0.86
+const DESK_SPINE = 0.06
+const DESK_ROW_Z = DESK_DEPTH / 2 + DESK_SPINE / 2
+const MONITOR_RADIUS = 0.9
 
 const COLORS = {
   accent: '#2b6cb0',
-  chair: '#272a32',
-  chairBack: '#17191f',
+  caster: '#090a0d',
+  chair: '#202229',
+  chairFrame: '#101216',
+  chairMesh: '#252931',
+  ceiling: '#d8d7d2',
+  ceilingLight: '#fff3cf',
   dining: '#9a6a34',
-  glass: '#9bd7f5',
-  leg: '#30343b',
-  monitor: '#27e0ff',
-  monitorStand: '#20242e',
+  glass: '#b9ddef',
+  leg: '#3f3023',
+  metal: '#34373d',
+  monitorFrame: '#08090d',
+  monitorStand: '#181a20',
   office: '#a9deff',
   roundTable: '#2a3350',
-  table: '#d8dce2',
+  shade: '#d8d3c7',
+  shadeCassette: '#9ca3aa',
+  table: '#f2f2ee',
+  tableBase: '#e6e6e2',
+  videoBezel: '#03050a',
+  videoCabinet: '#e3e3df',
+  videoScreen: '#ffffff',
   videoShell: '#d8cdbf',
-  windowFrame: '#7f8d9b',
+  videoTrim: '#c3b6a4',
+  windowFrame: '#8a97a6',
 } as const
+
+function emptyLayout(): PerformanceInteriorLayout {
+  return {
+    accentPads: [],
+    windowGlass: [],
+    windowFrames: [],
+    windowShades: [],
+    windowShadeCassettes: [],
+    videoWallShells: [],
+    videoWallTrims: [],
+    videoWallCabinets: [],
+    videoWallBezels: [],
+    videoWallScreens: [],
+    tableTops: [],
+    tableBases: [],
+    tableLegs: [],
+    roundTableTops: [],
+    roundPedestals: [],
+    chairSeats: [],
+    chairBackFrames: [],
+    chairBackMesh: [],
+    chairArmrests: [],
+    chairStems: [],
+    chairSpokes: [],
+    chairCasters: [],
+    monitorFrames: [],
+    monitorScreens: [],
+    monitorStems: [],
+    monitorBases: [],
+    officeGlass: [],
+    ceilingPanels: [],
+    ceilingLights: [],
+  }
+}
 
 function instance(
   ownerId: string,
@@ -70,10 +139,10 @@ function instance(
 }
 
 function zoneColor(zone: Zone, insight: InsightKey) {
-  if (insight === 'none') return zone.color
-  return heat(INSIGHTS[insight].value(zone))
+  return insight === 'none' ? zone.color : heat(INSIGHTS[insight].value(zone))
 }
 
+/** Mirrors a Three.js Y rotation on the horizontal x/z plane. */
 function worldFromLocal(
   centerX: number,
   centerZ: number,
@@ -86,21 +155,23 @@ function worldFromLocal(
   return [centerX + localX * cosine + localZ * sine, centerZ - localX * sine + localZ * cosine]
 }
 
-function addBoxAtLocal(
+function addAtZoneLocal(
   target: PerformanceInstance[],
   zone: Zone,
   role: string,
   index: number,
-  rotationY: number,
+  zoneRotationY: number,
   localPosition: Vec3,
   scale: Vec3,
   color: string,
-  rotationOffset = 0,
+  localRotationY = 0,
+  rotationX = 0,
+  rotationZ = 0,
 ) {
   const [x, z] = worldFromLocal(
     mmToMeters(zone.cx),
     mmToMeters(zone.cy),
-    rotationY,
+    zoneRotationY,
     localPosition[0],
     localPosition[2],
   )
@@ -110,132 +181,144 @@ function addBoxAtLocal(
       role,
       index,
       [x, localPosition[1], z],
-      [0, rotationY + rotationOffset, 0],
+      [rotationX, zoneRotationY + localRotationY, rotationZ],
       scale,
       color,
     ),
   )
 }
 
-function addChair(
-  layout: PerformanceInteriorLayout,
+function addAtNestedLocal(
+  target: PerformanceInstance[],
   zone: Zone,
+  role: string,
   index: number,
-  rotationY: number,
-  localX: number,
-  localZ: number,
-  outwardX: number,
-  outwardZ: number,
+  zoneRotationY: number,
+  groupX: number,
+  groupZ: number,
+  groupRotationY: number,
+  partPosition: Vec3,
+  scale: Vec3,
+  color: string,
+  partRotationY = 0,
+  rotationX = 0,
+  rotationZ = 0,
 ) {
-  addBoxAtLocal(
-    layout.chairSeats,
+  const [offsetX, offsetZ] = worldFromLocal(0, 0, groupRotationY, partPosition[0], partPosition[2])
+  addAtZoneLocal(
+    target,
     zone,
-    'chair-seat',
+    role,
     index,
-    rotationY,
-    [localX, 0.48, localZ],
-    [0.5, 0.09, 0.48],
-    COLORS.chair,
-  )
-  addBoxAtLocal(
-    layout.chairBacks,
-    zone,
-    'chair-back',
-    index,
-    rotationY,
-    [localX + outwardX * 0.2, 0.83, localZ + outwardZ * 0.2],
-    [0.52, 0.64, 0.08],
-    COLORS.chairBack,
+    zoneRotationY,
+    [groupX + offsetX, partPosition[1], groupZ + offsetZ],
+    scale,
+    color,
+    groupRotationY + partRotationY,
+    rotationX,
+    rotationZ,
   )
 }
 
-function emptyLayout(): PerformanceInteriorLayout {
-  return {
-    accentPads: [],
-    windowGlass: [],
-    windowFrames: [],
-    videoWallShells: [],
-    videoWallScreens: [],
-    tableTops: [],
-    tableLegs: [],
-    roundTableTops: [],
-    roundPedestals: [],
-    chairSeats: [],
-    chairBacks: [],
-    monitorBodies: [],
-    monitorStands: [],
-    officeGlass: [],
+function resampleLikeDetailedRenderer(points: readonly Point[], length: number): Point[] {
+  const output: Point[] = []
+  for (let index = 0; index < length; index += 1) {
+    const sourceIndex = Math.round((index * (points.length - 1)) / length)
+    const point = points[sourceIndex]
+    if (point) output.push(point)
   }
-}
-
-function sampledPolygon(points: readonly Point[], maximum: number) {
-  const count = Math.min(points.length, maximum)
-  if (count < 2) return []
-  return Array.from({ length: count }, (_, index) => {
-    const sourceIndex = Math.floor((index * points.length) / count)
-    return points[sourceIndex]!
-  })
+  return output
 }
 
 function addEnvelope(layout: PerformanceInteriorLayout, doc: VmcDocument) {
-  const centerX = doc.plate.reduce((sum, point) => sum + point.x, 0) / doc.plate.length
-  const centerY = doc.plate.reduce((sum, point) => sum + point.y, 0) / doc.plate.length
-  const inset = doc.plate.map((point) => ({
-    x: Math.round(centerX + (point.x - centerX) * 0.985),
-    y: Math.round(centerY + (point.y - centerY) * 0.985),
-  }))
-  const points = sampledPolygon(inset, MAX_WINDOW_SEGMENTS)
+  const inset = scalePoly(doc.plate, 0.985, Math.round(doc.ancho / 2), Math.round(doc.alto / 2))
+  const points = resampleLikeDetailedRenderer(inset, WINDOW_SEGMENTS)
 
-  points.forEach((point, index) => {
-    const next = points[(index + 1) % points.length]
+  points.forEach((point, segmentIndex) => {
+    const next = points[(segmentIndex + 1) % points.length]
     if (!next) return
     const x1 = mmToMeters(point.x)
     const z1 = mmToMeters(point.y)
     const x2 = mmToMeters(next.x)
     const z2 = mmToMeters(next.y)
-    const length = Math.hypot(x2 - x1, z2 - z1)
-    if (length < 0.05) return
-    const rotationY = Math.atan2(-(z2 - z1), x2 - x1)
-    const position: Vec3 = [(x1 + x2) / 2, 1.45, (z1 + z2) / 2]
+    const segmentLength = Math.hypot(x2 - x1, z2 - z1)
+    if (segmentLength < 0.3) return
 
+    const length = segmentLength + 0.05
+    const centerX = (x1 + x2) / 2
+    const centerZ = (z1 + z2) / 2
+    const rotationY = Math.atan2(-(z2 - z1), x2 - x1)
     layout.windowGlass.push(
       instance(
-        ENVELOPE_ID,
+        PRESENTATION_ENVELOPE_ID,
         'glass',
-        index,
-        position,
+        segmentIndex,
+        [centerX, 1.55, centerZ],
         [0, rotationY, 0],
-        [length + 0.04, 2.9, 0.035],
+        [length, 2.9, 0.04],
         COLORS.glass,
       ),
     )
+
+    const posts = Math.max(2, Math.round(length / 1.6))
+    for (let postIndex = 0; postIndex <= posts; postIndex += 1) {
+      const localX = -length / 2 + (length / posts) * postIndex
+      const [postX, postZ] = worldFromLocal(centerX, centerZ, rotationY, localX, 0)
+      layout.windowFrames.push(
+        instance(
+          PRESENTATION_ENVELOPE_ID,
+          'mullion',
+          segmentIndex * 100 + postIndex,
+          [postX, 1.55, postZ],
+          [0, rotationY, 0],
+          [0.06, 2.9, 0.09],
+          COLORS.windowFrame,
+        ),
+      )
+    }
     layout.windowFrames.push(
       instance(
-        ENVELOPE_ID,
-        'mullion',
-        index,
-        [x1, 1.45, z1],
-        [0, rotationY, 0],
-        [0.055, 2.9, 0.075],
-        COLORS.windowFrame,
-      ),
-      instance(
-        ENVELOPE_ID,
+        PRESENTATION_ENVELOPE_ID,
         'rail-bottom',
-        index,
-        [position[0], 0.045, position[2]],
+        segmentIndex,
+        [centerX, 0.13, centerZ],
         [0, rotationY, 0],
-        [length + 0.05, 0.09, 0.085],
+        [length, 0.09, 0.1],
         COLORS.windowFrame,
       ),
       instance(
-        ENVELOPE_ID,
+        PRESENTATION_ENVELOPE_ID,
         'rail-top',
-        index,
-        [position[0], 2.855, position[2]],
+        segmentIndex,
+        [centerX, 2.97, centerZ],
         [0, rotationY, 0],
-        [length + 0.05, 0.09, 0.085],
+        [length, 0.09, 0.1],
         COLORS.windowFrame,
+      ),
+    )
+
+    const shadeHeight = [0.52, 0.86, 1.18, 0.68][segmentIndex % 4]!
+    const [shadeX, shadeZ] = worldFromLocal(centerX, centerZ, rotationY, 0, 0.075)
+    layout.windowShades.push(
+      instance(
+        PRESENTATION_ENVELOPE_ID,
+        'roller-shade',
+        segmentIndex,
+        [shadeX, 2.9 - shadeHeight / 2, shadeZ],
+        [0, rotationY, 0],
+        [length * 0.96, shadeHeight, 0.018],
+        COLORS.shade,
+      ),
+    )
+    layout.windowShadeCassettes.push(
+      instance(
+        PRESENTATION_ENVELOPE_ID,
+        'roller-cassette',
+        segmentIndex,
+        [shadeX, 2.92, shadeZ],
+        [0, rotationY, 0],
+        [length, 0.12, 0.12],
+        COLORS.shadeCassette,
       ),
     )
   })
@@ -264,128 +347,390 @@ function addVideoWalls(layout: PerformanceInteriorLayout, doc: VmcDocument) {
         wall.id,
         'video-shell',
         0,
-        [centerX, 1.3, centerZ],
+        [centerX, 1.55, centerZ],
         [0, rotationY, 0],
-        [length, 2.6, 0.14],
+        [length, 3.1, 0.14],
         COLORS.videoShell,
       ),
     )
 
-    const rows = Math.max(1, Math.round(wall.filas ?? 2))
+    ;[
+      { y: 0.08, role: 'video-trim-bottom' },
+      { y: 3.02, role: 'video-trim-top' },
+    ].forEach((trim, trimIndex) => {
+      const [x, z] = worldFromLocal(centerX, centerZ, rotationY, 0, 0.075)
+      layout.videoWallTrims.push(
+        instance(
+          wall.id,
+          trim.role,
+          trimIndex,
+          [x, trim.y, z],
+          [0, rotationY, 0],
+          [length, 0.16, 0.02],
+          COLORS.videoTrim,
+        ),
+      )
+    })
+
+    const [cabinetX, cabinetZ] = worldFromLocal(centerX, centerZ, rotationY, 0, 0.26)
+    layout.videoWallCabinets.push(
+      instance(
+        wall.id,
+        'video-cabinet',
+        0,
+        [cabinetX, 0.55, cabinetZ],
+        [0, rotationY, 0],
+        [Math.max(0.5, length - 0.34), 0.82, 0.48],
+        COLORS.videoCabinet,
+      ),
+    )
+
+    const wallHeight = 3.1
+    const rows = Math.max(1, wall.filas ?? 2)
     const columns = Math.max(1, Math.ceil(wall.pantallas / rows))
-    const screenWidth = Math.max(0.18, (length - 0.42) / columns)
-    const screenHeight = Math.max(0.18, 2.18 / rows)
+    const gap = 0.03
+    const bandBottom = 1.05
+    const bandTop = wallHeight - 0.2
+    const availableHeight = bandTop - bandBottom
+    const screenHeight = Math.min(0.86, (availableHeight - (rows - 1) * gap) / rows)
+    const screenWidth = (length - 0.4) / columns - gap
+    const yBottom =
+      bandBottom +
+      (availableHeight - (rows * screenHeight + (rows - 1) * gap)) / 2 +
+      screenHeight / 2
+
     for (let screenIndex = 0; screenIndex < wall.pantallas; screenIndex += 1) {
-      const column = screenIndex % columns
       const row = Math.floor(screenIndex / columns)
-      const localX = -length / 2 + 0.21 + screenWidth * (column + 0.5)
-      const localY = 0.21 + screenHeight * (row + 0.5)
-      const [x, z] = worldFromLocal(centerX, centerZ, rotationY, localX, 0.09)
+      const column = screenIndex % columns
+      const localX = -((columns - 1) * (screenWidth + gap)) / 2 + column * (screenWidth + gap)
+      const localY = yBottom + row * (screenHeight + gap)
+      const [bezelX, bezelZ] = worldFromLocal(centerX, centerZ, rotationY, localX, 0.08)
+      const [screenX, screenZ] = worldFromLocal(centerX, centerZ, rotationY, localX, 0.095)
+      layout.videoWallBezels.push(
+        instance(
+          wall.id,
+          'video-bezel',
+          screenIndex,
+          [bezelX, localY, bezelZ],
+          [0, rotationY, 0],
+          [screenWidth, screenHeight, 0.018],
+          COLORS.videoBezel,
+        ),
+      )
       layout.videoWallScreens.push(
         instance(
           wall.id,
           'video-screen',
           screenIndex,
-          [x, localY, z],
+          [screenX, localY, screenZ],
           [0, rotationY, 0],
-          [screenWidth * 0.9, screenHeight * 0.88, 0.025],
-          screenIndex % 3 === 0 ? '#8b5cf6' : screenIndex % 2 === 0 ? '#0ea5e9' : '#27e0ff',
+          [Math.max(0.05, screenWidth - 0.02), Math.max(0.05, screenHeight - 0.02), 0.012],
+          COLORS.videoScreen,
         ),
       )
     }
   })
 }
 
+function addChair(
+  layout: PerformanceInteriorLayout,
+  zone: Zone,
+  chairIndex: number,
+  zoneRotationY: number,
+  chairX: number,
+  chairZ: number,
+  chairRotationY: number,
+) {
+  addAtNestedLocal(
+    layout.chairSeats,
+    zone,
+    'chair-seat',
+    chairIndex,
+    zoneRotationY,
+    chairX,
+    chairZ,
+    chairRotationY,
+    [0, 0.49, 0.02],
+    [0.5, 0.09, 0.48],
+    COLORS.chair,
+  )
+
+  const backBars: ReadonlyArray<{ position: Vec3; scale: Vec3 }> = [
+    { position: [-0.245, 0.9, -0.21], scale: [0.055, 0.7, 0.07] },
+    { position: [0.245, 0.9, -0.21], scale: [0.055, 0.7, 0.07] },
+    { position: [0, 1.23, -0.21], scale: [0.54, 0.055, 0.07] },
+    { position: [0, 0.57, -0.21], scale: [0.54, 0.055, 0.07] },
+  ]
+  backBars.forEach((bar, barIndex) => {
+    addAtNestedLocal(
+      layout.chairBackFrames,
+      zone,
+      'chair-back-frame',
+      chairIndex * backBars.length + barIndex,
+      zoneRotationY,
+      chairX,
+      chairZ,
+      chairRotationY,
+      bar.position,
+      bar.scale,
+      COLORS.chairFrame,
+      0,
+      -0.12,
+    )
+  })
+  const lumbarBars: ReadonlyArray<{ position: Vec3; scale: Vec3; rotationZ: number }> = [
+    { position: [0, 0.76, -0.23], scale: [0.055, 0.3, 0.06], rotationZ: 0 },
+    { position: [-0.1, 0.95, -0.23], scale: [0.05, 0.31, 0.06], rotationZ: -0.58 },
+    { position: [0.1, 0.95, -0.23], scale: [0.05, 0.31, 0.06], rotationZ: 0.58 },
+  ]
+  lumbarBars.forEach((bar, barIndex) => {
+    addAtNestedLocal(
+      layout.chairBackFrames,
+      zone,
+      'chair-lumbar-support',
+      chairIndex * lumbarBars.length + barIndex,
+      zoneRotationY,
+      chairX,
+      chairZ,
+      chairRotationY,
+      bar.position,
+      bar.scale,
+      COLORS.chairFrame,
+      0,
+      -0.12,
+      bar.rotationZ,
+    )
+  })
+  addAtNestedLocal(
+    layout.chairBackMesh,
+    zone,
+    'chair-back-mesh',
+    chairIndex,
+    zoneRotationY,
+    chairX,
+    chairZ,
+    chairRotationY,
+    [0, 0.9, -0.195],
+    [0.43, 0.61, 1],
+    COLORS.chairMesh,
+    0,
+    -0.12,
+  )
+
+  ;[-1, 1].forEach((side, sideIndex) => {
+    addAtNestedLocal(
+      layout.chairArmrests,
+      zone,
+      'chair-arm-pad',
+      chairIndex * 4 + sideIndex,
+      zoneRotationY,
+      chairX,
+      chairZ,
+      chairRotationY,
+      [side * 0.29, 0.76, 0],
+      [0.08, 0.05, 0.22],
+      COLORS.chairFrame,
+    )
+    addAtNestedLocal(
+      layout.chairArmrests,
+      zone,
+      'chair-arm-support',
+      chairIndex * 4 + 2 + sideIndex,
+      zoneRotationY,
+      chairX,
+      chairZ,
+      chairRotationY,
+      [side * 0.29, 0.63, 0.06],
+      [0.045, 0.26, 0.045],
+      COLORS.metal,
+    )
+  })
+
+  addAtNestedLocal(
+    layout.chairStems,
+    zone,
+    'chair-stem',
+    chairIndex,
+    zoneRotationY,
+    chairX,
+    chairZ,
+    chairRotationY,
+    [0, 0.28, 0],
+    [0.09, 0.4, 0.09],
+    COLORS.metal,
+  )
+
+  for (let spokeIndex = 0; spokeIndex < 5; spokeIndex += 1) {
+    const angle = (spokeIndex / 5) * Math.PI * 2
+    const casterX = Math.sin(angle) * 0.28
+    const casterZ = Math.cos(angle) * 0.28
+    addAtNestedLocal(
+      layout.chairSpokes,
+      zone,
+      'chair-spoke',
+      chairIndex * 5 + spokeIndex,
+      zoneRotationY,
+      chairX,
+      chairZ,
+      chairRotationY,
+      [casterX * 0.5, 0.06, casterZ * 0.5],
+      [0.06, 0.04, 0.34],
+      COLORS.chairFrame,
+      -angle,
+    )
+    addAtNestedLocal(
+      layout.chairCasters,
+      zone,
+      'chair-caster',
+      chairIndex * 5 + spokeIndex,
+      zoneRotationY,
+      chairX,
+      chairZ,
+      chairRotationY,
+      [casterX, 0.035, casterZ],
+      [0.07, 0.055, 0.07],
+      COLORS.caster,
+    )
+  }
+}
+
+function addMonitor(
+  layout: PerformanceInteriorLayout,
+  zone: Zone,
+  monitorIndex: number,
+  zoneRotationY: number,
+  monitorX: number,
+  monitorZ: number,
+  direction: -1 | 1,
+  screenColor: string,
+) {
+  const screenRotation = direction < 0 ? Math.PI : 0
+  addAtZoneLocal(
+    layout.monitorFrames,
+    zone,
+    'monitor-frame',
+    monitorIndex,
+    zoneRotationY,
+    [monitorX, 1.02, monitorZ],
+    [1, 1, 1],
+    COLORS.monitorFrame,
+    screenRotation,
+  )
+  addAtZoneLocal(
+    layout.monitorScreens,
+    zone,
+    'monitor-screen',
+    monitorIndex,
+    zoneRotationY,
+    [monitorX, 1.02, monitorZ],
+    [1, 1, 1],
+    screenColor,
+    screenRotation,
+  )
+
+  const supportZ = monitorZ - direction * (MONITOR_RADIUS - 0.08)
+  addAtZoneLocal(
+    layout.monitorStems,
+    zone,
+    'monitor-stem',
+    monitorIndex,
+    zoneRotationY,
+    [monitorX, 0.85, supportZ],
+    [0.05, 0.22, 0.04],
+    COLORS.monitorStand,
+  )
+  addAtZoneLocal(
+    layout.monitorBases,
+    zone,
+    'monitor-base',
+    monitorIndex,
+    zoneRotationY,
+    [monitorX, 0.76, supportZ],
+    [0.32, 0.03, 0.18],
+    COLORS.monitorStand,
+  )
+}
+
 function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: InsightKey) {
   const pairs = Math.max(1, Math.round(zone.pairs ?? 3))
-  const length = pairs * 1.6 + 0.6
-  const rotationY = -(zone.rot ?? 0)
-  const color = zoneColor(zone, insight)
+  const benchLength = pairs * DESK_WIDTH
+  const zoneRotationY = -(zone.rot ?? 0)
+  const screenColor = insight === 'none' ? '#ffffff' : zoneColor(zone, insight)
 
-  addBoxAtLocal(
+  addAtZoneLocal(
     layout.accentPads,
     zone,
     'accent',
     0,
-    rotationY,
-    [0, 0.075, 0],
-    [length + 0.25, 0.035, 3.2],
-    color,
+    zoneRotationY,
+    [0, 0.03, 0],
+    [benchLength + 0.6, 0.05, 3.3],
+    screenColor,
   )
-  addBoxAtLocal(
-    layout.tableTops,
-    zone,
-    'bench-top',
-    0,
-    rotationY,
-    [0, 0.74, 0],
-    [length, 0.085, 1.38],
-    COLORS.table,
-  )
-
-  const legX = Math.max(0.25, length / 2 - 0.28)
-  ;[-1, 1].forEach((xSide, xIndex) => {
-    ;[-1, 1].forEach((zSide, zIndex) => {
-      addBoxAtLocal(
-        layout.tableLegs,
-        zone,
-        'bench-leg',
-        xIndex * 2 + zIndex,
-        rotationY,
-        [xSide * legX, 0.37, zSide * 0.46],
-        [0.075, 0.7, 0.075],
-        COLORS.leg,
-      )
-    })
+  ;[-1, 1].forEach((side, sideIndex) => {
+    addAtZoneLocal(
+      layout.tableTops,
+      zone,
+      'bench-top',
+      sideIndex,
+      zoneRotationY,
+      [0, 0.74, side * DESK_ROW_Z],
+      [benchLength, 0.05, DESK_DEPTH],
+      COLORS.table,
+    )
+    addAtZoneLocal(
+      layout.tableBases,
+      zone,
+      'bench-base',
+      sideIndex,
+      zoneRotationY,
+      [0, 0.37, side * DESK_ROW_Z],
+      [benchLength * 0.96, 0.72, DESK_DEPTH * 0.5],
+      COLORS.tableBase,
+    )
   })
 
   for (let pairIndex = 0; pairIndex < pairs; pairIndex += 1) {
-    const x = (pairIndex - (pairs - 1) / 2) * 1.6
-    ;[-1, 1].forEach((side, sideIndex) => {
-      const index = pairIndex * 2 + sideIndex
-      addChair(layout, zone, index, rotationY, x, side * 1.03, 0, side)
-      addBoxAtLocal(
-        layout.monitorBodies,
-        zone,
-        'monitor',
-        index,
-        rotationY,
-        [x, 1.17, side * 0.31],
-        [0.58, 0.36, 0.045],
-        color,
-      )
-      addBoxAtLocal(
-        layout.monitorStands,
-        zone,
-        'monitor-stand',
-        index,
-        rotationY,
-        [x, 0.93, side * 0.31],
-        [0.06, 0.28, 0.06],
-        COLORS.monitorStand,
-      )
-    })
+    const x = -benchLength / 2 + DESK_WIDTH / 2 + pairIndex * DESK_WIDTH
+    const negativeIndex = pairIndex * 2
+    const positiveIndex = pairIndex * 2 + 1
+    addMonitor(
+      layout,
+      zone,
+      negativeIndex,
+      zoneRotationY,
+      x,
+      -DESK_ROW_Z + (DESK_DEPTH / 2 - 0.18),
+      -1,
+      screenColor,
+    )
+    addChair(
+      layout,
+      zone,
+      negativeIndex,
+      zoneRotationY,
+      x,
+      -(DESK_ROW_Z + DESK_DEPTH / 2 + 0.45),
+      Math.PI,
+    )
+    addMonitor(
+      layout,
+      zone,
+      positiveIndex,
+      zoneRotationY,
+      x,
+      DESK_ROW_Z - (DESK_DEPTH / 2 - 0.18),
+      1,
+      screenColor,
+    )
+    addChair(layout, zone, positiveIndex, zoneRotationY, x, DESK_ROW_Z + DESK_DEPTH / 2 + 0.45, 0)
   }
 }
 
-function addRoundTable(layout: PerformanceInteriorLayout, zone: Zone, insight: InsightKey) {
+function addRoundTable(layout: PerformanceInteriorLayout, zone: Zone) {
   const radius = mmToMeters(zone.r ?? 1650)
-  const tableRadius = radius * 0.55
-  const color = zoneColor(zone, insight)
   const centerX = mmToMeters(zone.cx)
   const centerZ = mmToMeters(zone.cy)
-
-  layout.accentPads.push(
-    instance(
-      zone.id,
-      'accent',
-      0,
-      [centerX, 0.075, centerZ],
-      [0, 0, 0],
-      [radius * 2.15, 0.035, radius * 2.15],
-      color,
-    ),
-  )
   layout.roundTableTops.push(
     instance(
       zone.id,
@@ -393,7 +738,7 @@ function addRoundTable(layout: PerformanceInteriorLayout, zone: Zone, insight: I
       0,
       [centerX, 0.74, centerZ],
       [0, 0, 0],
-      [tableRadius * 2, 0.08, tableRadius * 2],
+      [radius * 1.1, 0.06, radius * 1.1],
       COLORS.roundTable,
     ),
   )
@@ -404,57 +749,49 @@ function addRoundTable(layout: PerformanceInteriorLayout, zone: Zone, insight: I
       0,
       [centerX, 0.37, centerZ],
       [0, 0, 0],
-      [0.22, 0.7, 0.22],
-      COLORS.leg,
+      [0.21, 0.72, 0.21],
+      COLORS.monitorStand,
     ),
   )
 
-  const seats = 5
-  for (let index = 0; index < seats; index += 1) {
-    const angle = (index / seats) * Math.PI * 2
-    const localX = Math.cos(angle) * radius * 0.85
-    const localZ = Math.sin(angle) * radius * 0.85
-    addChair(layout, zone, index, 0, localX, localZ, Math.cos(angle), Math.sin(angle))
+  for (let chairIndex = 0; chairIndex < 5; chairIndex += 1) {
+    const angle = (chairIndex / 5) * Math.PI * 2
+    addChair(
+      layout,
+      zone,
+      chairIndex,
+      0,
+      Math.cos(angle) * radius * 0.85,
+      Math.sin(angle) * radius * 0.85,
+      -angle + Math.PI / 2,
+    )
   }
 }
 
-function addDiningTable(layout: PerformanceInteriorLayout, zone: Zone, insight: InsightKey) {
+function addDiningTable(layout: PerformanceInteriorLayout, zone: Zone) {
   const width = mmToMeters(zone.w ?? 3600)
-  const depth = mmToMeters(zone.h ?? 1600) * 0.69
-  const rotationY = -(zone.rot ?? 0)
-  const color = zoneColor(zone, insight)
-
-  addBoxAtLocal(
-    layout.accentPads,
-    zone,
-    'accent',
-    0,
-    rotationY,
-    [0, 0.075, 0],
-    [width + 0.45, 0.035, depth + 1.1],
-    color,
-  )
-  addBoxAtLocal(
+  const depth = 1.1
+  const zoneRotationY = -(zone.rot ?? 0)
+  addAtZoneLocal(
     layout.tableTops,
     zone,
     'dining-top',
     0,
-    rotationY,
+    zoneRotationY,
     [0, 0.75, 0],
-    [width, 0.08, depth],
+    [width, 0.07, depth],
     COLORS.dining,
   )
-
   ;[-1, 1].forEach((xSide, xIndex) => {
     ;[-1, 1].forEach((zSide, zIndex) => {
-      addBoxAtLocal(
+      addAtZoneLocal(
         layout.tableLegs,
         zone,
         'dining-leg',
         xIndex * 2 + zIndex,
-        rotationY,
-        [xSide * (width / 2 - 0.18), 0.37, zSide * (depth / 2 - 0.16)],
-        [0.07, 0.7, 0.07],
+        zoneRotationY,
+        [xSide * (width / 2 - 0.15), 0.37, zSide * (depth / 2 - 0.15)],
+        [0.1, 0.72, 0.1],
         COLORS.leg,
       )
     })
@@ -463,74 +800,106 @@ function addDiningTable(layout: PerformanceInteriorLayout, zone: Zone, insight: 
   const seatsPerSide = 4
   for (let index = 0; index < seatsPerSide; index += 1) {
     const x = -width / 2 + (width / (seatsPerSide + 1)) * (index + 1)
-    addChair(layout, zone, index * 2, rotationY, x, depth / 2 + 0.45, 0, 1)
-    addChair(layout, zone, index * 2 + 1, rotationY, x, -depth / 2 - 0.45, 0, -1)
+    addChair(layout, zone, index * 2, zoneRotationY, x, depth / 2 + 0.35, Math.PI)
+    addChair(layout, zone, index * 2 + 1, zoneRotationY, x, -depth / 2 - 0.35, 0)
   }
 }
 
 function addOffice(layout: PerformanceInteriorLayout, zone: Zone, insight: InsightKey) {
   const width = mmToMeters(zone.w ?? 3800)
   const depth = mmToMeters(zone.h ?? 2600)
-  const rotationY = -(zone.rot ?? 0)
-  const color = zoneColor(zone, insight)
-
-  addBoxAtLocal(
+  const zoneRotationY = -(zone.rot ?? 0)
+  const screenColor = zoneColor(zone, insight)
+  addAtZoneLocal(
     layout.officeGlass,
     zone,
     'office-glass',
     0,
-    rotationY,
+    zoneRotationY,
     [0, 1.4, 0],
     [width, 2.8, depth],
     COLORS.office,
   )
-  addBoxAtLocal(
+  addAtZoneLocal(
     layout.accentPads,
     zone,
-    'accent',
+    'office-floor',
     0,
-    rotationY,
-    [0, 0.075, 0],
-    [width, 0.035, depth],
-    color,
+    zoneRotationY,
+    [0, 0.04, 0],
+    [width, 0.06, depth],
+    screenColor,
   )
-  addBoxAtLocal(
+  addAtZoneLocal(
     layout.tableTops,
     zone,
     'office-desk',
     0,
-    rotationY,
+    zoneRotationY,
     [0, 0.74, 0.1],
-    [Math.min(1.6, width * 0.62), 0.065, Math.min(0.85, depth * 0.48)],
+    [1.6, 0.05, 0.85],
     COLORS.table,
   )
-  addBoxAtLocal(
-    layout.monitorBodies,
-    zone,
-    'office-monitor',
-    0,
-    rotationY,
-    [0, 1.17, -0.05],
-    [0.58, 0.36, 0.045],
-    color,
-  )
-  addBoxAtLocal(
-    layout.monitorStands,
-    zone,
-    'office-monitor-stand',
-    0,
-    rotationY,
-    [0, 0.93, -0.05],
-    [0.06, 0.28, 0.06],
-    COLORS.monitorStand,
-  )
-  addChair(layout, zone, 0, rotationY, 0, 0.82, 0, 1)
+  addMonitor(layout, zone, 0, zoneRotationY, 0, 0.1, -1, screenColor)
+  addChair(layout, zone, 0, zoneRotationY, 0, 0.85, Math.PI)
+}
+
+function addTechnicalCeiling(layout: PerformanceInteriorLayout, doc: VmcDocument) {
+  const stepMm = 2400
+  const halfPanelMm = 1160
+  const minX = Math.min(...doc.plate.map((point) => point.x))
+  const maxX = Math.max(...doc.plate.map((point) => point.x))
+  const minY = Math.min(...doc.plate.map((point) => point.y))
+  const maxY = Math.max(...doc.plate.map((point) => point.y))
+  const elevation = mmToMeters(doc.alturaLibre)
+  let panelIndex = 0
+  let lightIndex = 0
+
+  for (let y = minY + stepMm / 2, row = 0; y <= maxY - stepMm / 2; y += stepMm, row += 1) {
+    for (let x = minX + stepMm / 2, column = 0; x <= maxX - stepMm / 2; x += stepMm, column += 1) {
+      const cornersInside = [
+        pointInPolygon(x - halfPanelMm, y - halfPanelMm, doc.plate),
+        pointInPolygon(x + halfPanelMm, y - halfPanelMm, doc.plate),
+        pointInPolygon(x - halfPanelMm, y + halfPanelMm, doc.plate),
+        pointInPolygon(x + halfPanelMm, y + halfPanelMm, doc.plate),
+      ].filter(Boolean).length
+      if (cornersInside < 3) continue
+
+      layout.ceilingPanels.push(
+        instance(
+          PRESENTATION_CEILING_ID,
+          'ceiling-panel',
+          panelIndex,
+          [mmToMeters(x), elevation - 0.055, mmToMeters(y)],
+          [0, 0, 0],
+          [2.32, 0.045, 2.32],
+          (row + column) % 2 === 0 ? COLORS.ceiling : '#c9cac7',
+        ),
+      )
+      panelIndex += 1
+
+      if ((row * 3 + column) % 5 === 0) {
+        layout.ceilingLights.push(
+          instance(
+            PRESENTATION_CEILING_ID,
+            'ceiling-light',
+            lightIndex,
+            [mmToMeters(x), elevation - 0.082, mmToMeters(y)],
+            [0, 0, 0],
+            [1.18, 0.025, 0.34],
+            COLORS.ceilingLight,
+          ),
+        )
+        lightIndex += 1
+      }
+    }
+  }
 }
 
 /**
- * Converts the validated document's integer millimetres into a compact set of
- * render-only metre transforms. Generated IDs are deterministic and retain the
- * source object's stable ID as ownerId.
+ * Render-only adapter that preserves the source document's stable owners and
+ * the detailed renderer's object centers/orientations. Dimensional truth stays
+ * in integer millimetres until transforms are produced here for Three.js.
  */
 export function buildPerformanceInteriorLayout(
   doc: VmcDocument,
@@ -539,11 +908,12 @@ export function buildPerformanceInteriorLayout(
   const layout = emptyLayout()
   addEnvelope(layout, doc)
   addVideoWalls(layout, doc)
+  addTechnicalCeiling(layout, doc)
 
   doc.zonas.forEach((zone) => {
     if (zone.kind === 'bench') addBench(layout, zone, insight)
-    else if (zone.kind === 'circular') addRoundTable(layout, zone, insight)
-    else if (zone.kind === 'comedor') addDiningTable(layout, zone, insight)
+    else if (zone.kind === 'circular') addRoundTable(layout, zone)
+    else if (zone.kind === 'comedor') addDiningTable(layout, zone)
     else if (zone.kind === 'oficina') addOffice(layout, zone, insight)
   })
 
