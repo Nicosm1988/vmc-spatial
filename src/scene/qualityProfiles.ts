@@ -18,14 +18,14 @@ export const QUALITY_PROFILES: Record<ResolvedQuality, QualityProfile> = {
     exteriorDetail: 'mid',
   },
   balanced: {
-    dpr: 1.25,
+    dpr: 1.5,
     shadows: true,
     shadowMapSize: 1024,
-    postprocessing: false,
+    postprocessing: true,
     exteriorDetail: 'near',
   },
   cinematic: {
-    dpr: 1.75,
+    dpr: 2,
     shadows: true,
     shadowMapSize: 2048,
     postprocessing: true,

@@ -38,6 +38,13 @@ export interface OrientLabel {
   y: number
   rot?: number
 }
+export interface DimensionalSurvey {
+  element: string
+  valueMm: number
+  toleranceMm: number
+  source: string
+  date: string
+}
 export interface VmcDocument {
   schema: 'vmc-spatial/6'
   nombre: string
@@ -50,6 +57,7 @@ export interface VmcDocument {
   zonas: Zone[]
   videoWalls: VideoWall[]
   orientacion: OrientLabel[]
+  relevamiento?: DimensionalSurvey[]
   actualizado: string
 }
 export type AppMode = 'explorar' | 'editar2d' | 'editar3d'

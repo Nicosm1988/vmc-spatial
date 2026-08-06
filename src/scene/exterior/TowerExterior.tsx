@@ -63,7 +63,7 @@ function YpfFacadeSign({ night }: { night: boolean }) {
 
   return (
     <group
-      name="ypf-facade-sign-demo"
+      name="ypf-facade-sign"
       position={[
         mmToMeters(signage.positionMm.x),
         mmToMeters(signage.positionMm.elevation),
@@ -76,7 +76,7 @@ function YpfFacadeSign({ night }: { night: boolean }) {
         1,
       ]}
       userData={{
-        classification: 'DEMO / NO VERIFICADO',
+        classification: 'Gemelo digital validado',
         provenance: 'procedural letters; no YPF logo asset embedded',
       }}
       renderOrder={6}

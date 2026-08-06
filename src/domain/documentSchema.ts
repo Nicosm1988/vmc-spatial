@@ -52,6 +52,16 @@ const orientLabelSchema = z
   })
   .strict()
 
+const dimensionalSurveySchema = z
+  .object({
+    element: z.string().min(1),
+    valueMm: integerMm,
+    toleranceMm: integerMm.nonnegative(),
+    source: z.string().min(1),
+    date: z.string().min(1),
+  })
+  .strict()
+
 export const vmcDocumentSchema = z
   .object({
     schema: z.literal('vmc-spatial/6'),
@@ -65,6 +75,7 @@ export const vmcDocumentSchema = z
     zonas: z.array(zoneSchema),
     videoWalls: z.array(videoWallSchema),
     orientacion: z.array(orientLabelSchema),
+    relevamiento: z.array(dimensionalSurveySchema).optional(),
     actualizado: z.string(),
   })
   .strict()

@@ -192,9 +192,28 @@ export default function Inspector({ doc, selectedId, mode, onPatchZone }: Props)
           </div>
         </div>
       )}
-      <div className="hint">
+      <div className="hint" style={{ marginBottom: 12 }}>
         Tipo: <span className="badge">{z.kind}</span>
       </div>
+      
+      {doc.relevamiento && doc.relevamiento.length > 0 && (
+        <div className="metrics-panel" style={{ marginTop: 24, padding: 12, background: 'rgba(0,0,0,0.1)', borderRadius: 6 }}>
+          <h4 style={{ margin: '0 0 12px 0', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, color: '#a0aab5' }}>
+            Métricas Exactas
+          </h4>
+          {doc.relevamiento.map((r, i) => (
+            <div key={i} style={{ marginBottom: 8, fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                <span style={{ color: '#fff' }}>{r.element}</span>
+                <strong>{r.valueMm} mm</strong>
+              </div>
+              <div style={{ color: '#8a97a6', fontSize: 11 }}>
+                ±{r.toleranceMm}mm · {r.source}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

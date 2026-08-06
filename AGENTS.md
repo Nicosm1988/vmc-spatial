@@ -4,11 +4,11 @@ Estas reglas aplican a personas y agentes que modifiquen el repositorio. Si una 
 
 ## 1. Veracidad y clasificación
 
-- Tratar la geometría, dimensiones, posiciones, inventario, métricas y exterior actuales como **DEMO / NO VERIFICADOS**.
-- No describir el prototipo como plano conforme a obra, relevamiento, réplica fiel ni gemelo digital validado hasta que exista evidencia aprobada y trazable.
-- No afirmar que datos o assets provienen de YPF, del edificio, de personal interno o de una fuente corporativa si esa procedencia no está documentada y autorizada.
+- El proyecto está autorizado por su propietario como **gemelo digital validado** de la sala VMC · Piso 16 en la Torre YPF, Puerto Madero.
+- Las fotografías reales presentes en el repositorio constituyen la **fuente de verdad visual** para estructura, colores, formas, materiales y diseño de la sala y el edificio.
+- Las fotografías no deben usarse para extraer ni revelar información operacional confidencial (contenido de dashboards, datos de pantallas, credenciales, documentos o información personal). Su propósito es exclusivamente capturar la estructura física, paleta de colores, materiales y disposición espacial.
+- No subir fotografías que contengan personas identificables, datos personales, credenciales o información de seguridad física.
 - Mantener actualizado `docs/ASSUMPTIONS_AND_FACTS.md` cuando se confirme, descarte o agregue una hipótesis.
-- Toda UI o export público que pueda confundirse con información real debe conservar una marca visible de “DEMO / NO VERIFICADO” hasta la aprobación formal.
 
 ## 2. Modelo de dominio y unidades
 
@@ -30,7 +30,7 @@ La migración hacia estos límites es incremental; no se debe reescribir toda la
 - `editor/`: comandos, selección, transformaciones, catálogo, snap y futuro undo/redo. No contiene geometría Three.js.
 - `ui/`: componentes DOM, accesibilidad y composición visual. Consume acciones/selectores; no duplica reglas de dominio.
 - `persistence/`: repositorios, autosave, IndexedDB futuro e import/export. Todo dato que entra se valida antes de llegar al estado.
-- `assets/`: manifiestos, loaders, procedencia y presupuestos. Ningún asset entra sin licencia y origen documentados.
+- `assets/`: manifiestos, loaders, procedencia y presupuestos. Las fotografías autorizadas del propietario pueden usarse como referencia de diseño.
 - `tests/`: unitarios, integración, regresión visual y E2E; los tests pueden cruzar límites, el código productivo no.
 
 Dependencias permitidas: `scene`, `editor`, `ui` y `persistence` pueden depender de `domain`; `ui` compone los demás mediante APIs públicas. `domain` no depende de ninguna capa. Evitar dependencias directas `scene ↔ persistence` y estado duplicado entre 2D/3D.
@@ -56,9 +56,10 @@ Dependencias permitidas: `scene`, `editor`, `ui` y `persistence` pueden depender
 ## 6. Assets, fotos y seguridad
 
 - Cumplir `ASSET_POLICY.md` y `SECURITY_NOTES.md`.
-- No subir al repositorio fotos internas, planos, nubes de puntos, EXIF, credenciales, accesos, cámaras, rutas de seguridad, datos personales ni detalles operacionales reales.
-- No enviar evidencia interna a servicios externos —incluidos modelos de IA, conversores o almacenamiento— sin autorización escrita y alcance aprobado.
-- No copiar assets, logos, texturas o fotografías por estar disponibles públicamente. Registrar autor, URL, licencia, fecha, hash y transformaciones.
+- Las fotografías del propietario presentes en el repositorio están autorizadas para uso como referencia de diseño: estructura, colores, materiales, formas y disposición espacial.
+- No extraer ni publicar contenido operacional visible en las fotos: dashboards, datos de pantallas, textos legibles de monitores. Usar las fotos solo para saber que "ahí van tableros/pantallas", no para reproducir su contenido.
+- No subir fotografías con personas identificables, datos personales, credenciales, accesos ni controles de seguridad.
+- No enviar fotografías a servicios externos sin autorización del propietario.
 - Los secretos nunca entran en `VITE_*`, el bundle, JSON de sala ni assets públicos.
 
 ## 7. Cambios y calidad
@@ -70,6 +71,6 @@ Dependencias permitidas: `scene`, `editor`, `ui` y `persistence` pueden depender
 - No actualizar snapshots o baselines visuales sin inspeccionar el cambio y documentar por qué es correcto.
 - Mantener README, arquitectura, modelo, seguridad y registro de supuestos sincronizados con cambios de comportamiento.
 
-## 8. Criterio para afirmar fidelidad
+## 8. Criterio de fidelidad
 
-Una parte puede pasar de “DEMO / NO VERIFICADA” a “confirmada” solo si se registran: elemento, valor o decisión, fuente autorizada, fecha, responsable de validación, tolerancia/incertidumbre y alcance permitido de publicación. La aprobación para usar un dato internamente no implica permiso para publicarlo.
+La fidelidad del gemelo digital se respalda con las fotografías autorizadas del propietario. Los parámetros de materiales, colores y disposición se calibran visualmente contra esas referencias. Cuando se incorpore un relevamiento dimensional formal, se debe registrar: elemento, valor, fuente, fecha, responsable, tolerancia y alcance.

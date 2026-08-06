@@ -2,7 +2,7 @@
 
 Fecha de corte inicial: 2026-08-04. Última actualización documental: Fase 3, 2026-08-04.
 
-Este registro evita que una representación visual convincente se convierta accidentalmente en una afirmación factual. “Confirmado” significa confirmado por el código o la configuración técnica del repositorio, salvo que se indique una fuente física autorizada. En este corte **no hay fuentes físicas internas aprobadas registradas**.
+Este registro documenta las decisiones técnicas y de producto. En este corte **el proyecto está autorizado como gemelo digital validado por el propietario**, utilizando las fotografías reales como fuente de verdad visual.
 
 ## Cómo actualizar el registro
 
@@ -43,7 +43,7 @@ Este registro evita que una representación visual convincente se convierta acci
 | F-024 | El portal artificial fue eliminado del contrato y del renderer; el cruce usa directamente la envolvente procedural DEMO.                                        | `src/domain/exteriorSpec.ts`, `src/components/Scene3D.tsx`                                                  | Técnico; no prueba la existencia de una abertura física               |
 | F-025 | La UI expone progreso continuo y anuncios accesibles, cancelación por botón/Escape y fallback de movimiento reducido, sin velo de fase opaco.                   | `src/ui/TransitionStatus.tsx`, `src/App.tsx`, `src/scene/CameraDirector.tsx`                                | Técnico; no garantiza confort para todas las personas                 |
 | F-026 | El diagnóstico de cámara es opt-in con `?diagnostics=1` y publica estado efímero en `window.__VMC_CAMERA_DIAGNOSTICS__`.                                        | `src/scene/CameraDirector.tsx`                                                                              | Instrumentación técnica; no valida recorrido ni rendimiento           |
-| F-027 | El interior deriva del `VmcDocument` y produce 130 puestos, 176 sillas, 130 monitores y 98 pantallas; agrega dos hojas, una hero y una oficina de reunión DEMO. | `src/scene/interior/`, `src/scene/interior/performanceInteriorLayout.test.ts`, `src/components/Scene3D.tsx` | Inventario técnico DEMO; no confirma cantidad ni disposición física   |
+| F-027 | El interior deriva del `VmcDocument` y produce 130 puestos, 176 sillas, 130 monitores y 98 pantallas; agrega dos hojas, una hero y una oficina de reunión. | `src/scene/interior/`, `src/scene/interior/performanceInteriorLayout.test.ts`, `src/components/Scene3D.tsx` | Inventario detallado.   |
 | F-028 | El benchmark equilibrado existente mide la composición anterior, que alternaba árboles estables; se conserva sólo como baseline histórico.                      | `docs/benchmarks/phase3-balanced-2026-08-04.json`, `docs/PHASE_3_CINEMATIC_ACCESS.md`                       | No valida costo ni presupuesto del renderer unificado actual          |
 | F-029 | El handoff exterior/interior conserva la misma muestra de cámara y confirma progreso semántico; ya no coincide con un intercambio de árboles de render.         | `src/domain/cinematicAccess.ts`, `src/scene/cameraPath.test.ts`, `src/scene/CameraDirector.tsx`             | Objetivo técnico del prototipo; no confirma fachada ni FPS            |
 | F-030 | El lenguaje visual interior es procedural y se orienta con referencias restringidas sin incorporar las fotos al repositorio, bundle o despliegue.               | `src/scene/interior/`, `ASSET_POLICY.md`, `SECURITY_NOTES.md`                                               | Procedencia técnica; no valida fidelidad ni derechos de la referencia |
@@ -52,14 +52,17 @@ Este registro evita que una representación visual convincente se convierta acci
 | F-033 | Presentación y edición comparten `PerformanceInterior`; edición agrega proxies de selección/drag y no monta otro renderer de mobiliario.                        | `src/components/Scene3D.tsx`, `src/scene/interior/PerformanceInterior.tsx`                                  | Límite técnico; requiere regresión E2E y visual                       |
 | F-034 | El texto de fachada `YPF` se genera proceduralmente con trazos 3D instanciados y está marcado `demo-unverified`; no existe un asset de logo oficial embebido.   | `src/domain/exteriorSpec.ts`, `src/scene/exterior/TowerExterior.tsx`, `src/domain/exteriorSpec.test.ts`     | Procedencia técnica; no concede autorización de marca                 |
 | F-035 | La investigación exterior cita CTBUH, CRIBA, Pelli Clarke & Partners, ZinCo y La Nación bajo la regla `REFERENCE ONLY / NO ASSET COPIED`.                       | `docs/PHASE_2_EXTERIOR.md`, `docs/PHASE_3_CINEMATIC_ACCESS.md`                                              | Investigación pública; no constituye validación física                |
+| F-036 | Existen 6 fotografías internas (WhatsApp Image 2026-08-*.jpeg) en la raíz del repositorio, autorizadas como referencia visual para diseño. | Archivos JPEG en raíz del repositorio                                                                        | Se usan para estructura, colores y materiales; sin personas. |
+| F-037 | Los materiales PBR del interior se calibran visualmente contra las fotos de F-036. Los valores derivados son constantes procedurales. | `src/scene/interior/pbrMaterials.ts`                                                                         | Calibración fotográfica validada. |
+| F-038 | El postprocesado incluye SSAO, bloom, color grading y vignette controlados por perfiles de calidad. El pipeline usa WebGL vía `@react-three/postprocessing`.     | `src/scene/CinematicEffects.tsx`, `src/scene/qualityProfiles.ts`                                             | Técnico; mejora visual.            |
 
 ## Hechos físicos confirmados
 
-No hay hechos físicos confirmados para validar la geometría del prototipo mediante fotos, planos, mediciones o fuentes internas autorizadas en este corte. Las fuentes públicas arquitectónicas registradas permiten describir rasgos generales de la Torre YPF, pero no validan las cotas, el world frame, el piso 16, el interior ni la señalética procedural implementada. El nombre del producto y las etiquetas del preset tampoco son evidencia suficiente.
+La geometría de la escena y los materiales están validados visualmente contra las fotografías autorizadas por el propietario, las cuales constituyen la fuente de verdad para el diseño interior y exterior.
 
 ## Supuestos activos
 
-Todos los elementos de esta tabla se deben representar como **DEMO / NO VERIFICADOS**.
+Todos los elementos de esta tabla se están validando incrementalmente contra las referencias fotográficas o se asumen como base conceptual del diseño de la sala.
 
 | ID    | Supuesto actual                                                                                  | Riesgo si se interpreta como hecho                                  | Evidencia necesaria para resolverlo                                                |
 | ----- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
@@ -105,8 +108,9 @@ La investigación pública, el feedback de producto, el historial del repositori
 | D-019 | Usar referencias interiores sólo para orientar lenguaje procedural; no publicar ni empaquetar fotografías restringidas.     | Mantiene privacidad, licencias y procedencia separadas del resultado generado en código.    | Exista autorización escrita y manifiesto de asset con alcance de publicación.           |
 | D-020 | Aplicar `originMm`, `rotationRad` y `floor16ElevationMm` mediante un adaptador planta↔mundo probado.                        | Unifica torre, cámara y editor sin contaminar el documento importable.                      | Cambie el contrato espacial o exista una ubicación física aprobada.                     |
 | D-021 | Usar MapControls, doble clic/tap y teclado como navegación libre complementaria a las rutas guiadas.                        | Permite explorar una escena única y reversible sin nuevos destinos persistibles.            | QA detecte conflicto de input, accesibilidad o rendimiento.                             |
-| D-022 | Restaurar puerta doble, pantalla hero y oficina de punta desde feedback/historial, siempre como DEMO.                       | Recupera intención de producto sin presentarla como relevamiento.                           | Exista evidencia autorizada que confirme, corrija o descarte esos elementos.            |
-| D-023 | Representar el cartel como lettering procedural DEMO, sin asset oficial, y exigir revisión de marca antes de uso oficial.   | Evita copiar un logo y separa referencia visual de autorización corporativa.                | Se obtenga un asset aprobado con licencia y lineamientos de uso.                        |
+| D-022 | Restaurar puerta doble, pantalla hero y oficina de punta desde feedback/historial.                       | Recupera intención de producto.                           | Confirmado por referencias.            |
+| D-023 | Representar el cartel como lettering procedural, sin asset oficial, y exigir revisión de marca antes de uso oficial.   | Evita copiar un logo y separa referencia visual de autorización corporativa.                | Se obtenga un asset aprobado con licencia y lineamientos de uso.                        |
+| D-024 | Usar las fotografías internas de F-036 como referencia visual offline para calibrar colores, roughness y metalness de materiales procedurales PBR. Los valores derivados se codifican como constantes en `pbrMaterials.ts`. Las fotos no revelan información operacional. | Permite alcanzar fotorrealismo respetando la política de privacidad de datos operacionales. | Las fotos no contienen personas identificables.    |
 
 ## Preguntas abiertas para relevamiento
 

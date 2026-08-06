@@ -57,10 +57,15 @@ export const PRESENTATION_ENTRY_ID = 'demo-core-entry'
 export const PRESENTATION_HERO_SCREEN_ID = 'demo-entry-hero-screen'
 
 const WINDOW_SEGMENTS = 30
-const DESK_WIDTH = 1.6
-const DESK_DEPTH = 0.86
+const DEFAULT_DESK_WIDTH = 1.6
+const DEFAULT_DESK_DEPTH = 0.86
 const DESK_SPINE = 0.06
-const DESK_ROW_Z = DESK_DEPTH / 2 + DESK_SPINE / 2
+
+function getMetricMeters(doc: VmcDocument, element: string, defaultValue: number): number {
+  if (!doc.relevamiento) return defaultValue
+  const match = doc.relevamiento.find((s) => s.element === element)
+  return match ? match.valueMm / 1000 : defaultValue
+}
 
 const COLORS = {
   accent: '#2b6cb0',
@@ -859,9 +864,16 @@ function addMonitor(
   )
 }
 
-function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: InsightKey) {
+function addBench(
+  layout: PerformanceInteriorLayout,
+  zone: Zone,
+  insight: InsightKey,
+  deskWidth: number,
+  deskDepth: number,
+) {
+  const deskRowZ = deskDepth / 2 + DESK_SPINE / 2
   const pairs = Math.max(1, Math.round(zone.pairs ?? 3))
-  const benchLength = pairs * DESK_WIDTH
+  const benchLength = pairs * deskWidth
   const zoneRotationY = -(zone.rot ?? 0)
   const screenColor = insight === 'none' ? '#ffffff' : zoneColor(zone, insight)
 
@@ -882,8 +894,8 @@ function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: Insigh
       'bench-top',
       sideIndex,
       zoneRotationY,
-      [0, 0.74, side * DESK_ROW_Z],
-      [benchLength, 0.05, DESK_DEPTH],
+      [0, 0.74, side * deskRowZ],
+      [benchLength, 0.05, deskDepth],
       COLORS.table,
     )
     addAtZoneLocal(
@@ -892,14 +904,14 @@ function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: Insigh
       'bench-base',
       sideIndex,
       zoneRotationY,
-      [0, 0.37, side * DESK_ROW_Z],
-      [benchLength * 0.96, 0.72, DESK_DEPTH * 0.5],
+      [0, 0.37, side * deskRowZ],
+      [benchLength * 0.96, 0.72, deskDepth * 0.5],
       COLORS.tableBase,
     )
   })
 
   for (let pairIndex = 0; pairIndex < pairs; pairIndex += 1) {
-    const x = -benchLength / 2 + DESK_WIDTH / 2 + pairIndex * DESK_WIDTH
+    const x = -benchLength / 2 + deskWidth / 2 + pairIndex * deskWidth
     const negativeIndex = pairIndex * 2
     const positiveIndex = pairIndex * 2 + 1
     addMonitor(
@@ -908,7 +920,7 @@ function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: Insigh
       negativeIndex,
       zoneRotationY,
       x,
-      -DESK_ROW_Z + (DESK_DEPTH / 2 - 0.18),
+      -deskRowZ + (deskDepth / 2 - 0.18),
       -1,
       screenColor,
     )
@@ -918,7 +930,7 @@ function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: Insigh
       negativeIndex,
       zoneRotationY,
       x,
-      -(DESK_ROW_Z + DESK_DEPTH / 2 + 0.45),
+      -(deskRowZ + deskDepth / 2 + 0.45),
       0,
     )
     addMonitor(
@@ -927,7 +939,7 @@ function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: Insigh
       positiveIndex,
       zoneRotationY,
       x,
-      DESK_ROW_Z - (DESK_DEPTH / 2 - 0.18),
+      deskRowZ - (deskDepth / 2 - 0.18),
       1,
       screenColor,
     )
@@ -937,7 +949,7 @@ function addBench(layout: PerformanceInteriorLayout, zone: Zone, insight: Insigh
       positiveIndex,
       zoneRotationY,
       x,
-      DESK_ROW_Z + DESK_DEPTH / 2 + 0.45,
+      deskRowZ + deskDepth / 2 + 0.45,
       Math.PI,
     )
   }
@@ -1194,12 +1206,15 @@ export function buildPerformanceInteriorLayout(
   insight: InsightKey,
 ): PerformanceInteriorLayout {
   const layout = emptyLayout()
+  const deskWidth = getMetricMeters(doc, 'desk-width', DEFAULT_DESK_WIDTH)
+  const deskDepth = getMetricMeters(doc, 'desk-depth', DEFAULT_DESK_DEPTH)
+
   addEnvelope(layout, doc)
   addVideoWalls(layout, doc)
   addTechnicalCeiling(layout, doc)
 
   doc.zonas.forEach((zone) => {
-    if (zone.kind === 'bench') addBench(layout, zone, insight)
+    if (zone.kind === 'bench') addBench(layout, zone, insight, deskWidth, deskDepth)
     else if (zone.kind === 'circular') addRoundTable(layout, zone)
     else if (zone.kind === 'comedor') addDiningTable(layout, zone)
     else if (zone.kind === 'oficina') addOffice(layout, zone, insight)

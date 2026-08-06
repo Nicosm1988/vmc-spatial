@@ -72,6 +72,19 @@ Las fotos y mediciones son evidencia restringida por defecto, no assets publicab
 
 El procedimiento de captura está en [`docs/PHOTO_MEASUREMENT_CHECKLIST.md`](./docs/PHOTO_MEASUREMENT_CHECKLIST.md).
 
+## Referencia visual para calibración PBR
+
+Las fotografías internas clasificadas como `EVIDENCIA RESTRINGIDA` pueden usarse como referencia visual offline para derivar parámetros procedurales de materiales. Esta práctica:
+
+- **permite** extraer paletas de color, niveles de roughness/metalness y proporciones visuales observando las fotos;
+- **permite** codificar los valores derivados como constantes numéricas en el código fuente (por ejemplo, `roughness: 0.95`, `color: '#8a8580'`);
+- **prohíbe** cargar, importar, convertir o incrustar las fotos como texturas, mapas o assets en el pipeline de build;
+- **prohíbe** enviar las fotos a servicios externos, modelos de IA o herramientas de conversión;
+- **prohíbe** publicar las fotos en el repositorio público, bundle o deploy (su presencia actual en la raíz es una anomalía pendiente de limpieza);
+- **requiere** documentar en el código fuente que los valores provienen de "referencia visual offline, evidencia restringida no incorporada".
+
+Los parámetros derivados se utilizan para establecer el aspecto visual del gemelo digital.
+
 ## Manifiesto de procedencia
 
 Cuando se incorporen archivos en `assets/`, cada uno debe tener una entrada de manifiesto versionada. Campos mínimos:

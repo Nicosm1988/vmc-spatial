@@ -16,8 +16,12 @@ import PerformanceInterior from '../scene/interior/PerformanceInterior'
 import { resolveVideoWallArchitecture } from '../scene/interior/performanceInteriorLayout'
 import ProceduralEnvironment from '../scene/ProceduralEnvironment'
 import { FLOOR16_WORLD_FRAME, worldToFloorLocal } from '../scene/spatialFrame'
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
 
 const CinematicEffects = lazy(() => import('../scene/CinematicEffects'))
+
+// Initialize RectAreaLight uniforms once at module load (required by Three.js)
+RectAreaLightUniformsLib.init()
 
 export type { CamApi } from '../scene/cameraTypes'
 
@@ -301,8 +305,9 @@ export default function Scene3D({
         antialias: !profile.postprocessing,
         powerPreference: 'high-performance',
         toneMapping: THREE.ACESFilmicToneMapping,
-        toneMappingExposure: night ? 1.02 : 0.9,
+        toneMappingExposure: night ? 1.05 : 0.95,
         preserveDrawingBuffer: true,
+        outputColorSpace: THREE.SRGBColorSpace,
       }}
       onCreated={({ gl }) => {
         gl.domElement.dataset.sceneComposition = 'unified-world'
@@ -314,36 +319,43 @@ export default function Scene3D({
         <Sky
           distance={1500}
           sunPosition={[130, 45, 90]}
-          turbidity={2.6}
-          rayleigh={0.9}
-          mieCoefficient={0.004}
-          mieDirectionalG={0.88}
+          turbidity={2.2}
+          rayleigh={0.7}
+          mieCoefficient={0.003}
+          mieDirectionalG={0.9}
         />
       ) : (
-        <color attach="background" args={['#02050b']} />
+        <color attach="background" args={['#020810']} />
       )}
-      <fog attach="fog" args={[night ? '#08111d' : '#bcd2e6', 240, 1100]} />
-      <hemisphereLight args={[night ? '#355579' : '#f0f6ff', '#27362f', night ? 0.7 : 1.02]} />
-      <ambientLight intensity={night ? 0.35 : 0.28} />
+      <fog attach="fog" args={[night ? '#06101e' : '#c5d8ea', 260, 1200]} />
+      <hemisphereLight args={[night ? '#355579' : '#e8f0ff', '#2a3830', night ? 0.65 : 1.1]} />
+      <ambientLight intensity={night ? 0.3 : 0.22} />
       <primitive object={daylightTarget} />
       <directionalLight
         position={[centerX + 100, 150, centerZ - 50]}
         target={daylightTarget}
-        intensity={night ? 0.9 : 2.05}
-        color={night ? '#9fb4e0' : '#fff3e0'}
+        intensity={night ? 0.85 : 2.2}
+        color={night ? '#9fb4e0' : '#fff0d8'}
         castShadow={profile.shadows}
         shadow-mapSize-width={profile.shadowMapSize}
         shadow-mapSize-height={profile.shadowMapSize}
-        shadow-bias={-0.0004}
-        shadow-normalBias={0.025}
+        shadow-bias={-0.0003}
+        shadow-normalBias={0.02}
       >
         <orthographicCamera attach="shadow-camera" args={[-100, 100, 100, -100, 0.1, 520]} />
       </directionalLight>
       <directionalLight
         position={[centerX - 130, 96, centerZ + 190]}
         target={daylightTarget}
-        intensity={night ? 0.5 : 0.78}
-        color={night ? '#496582' : '#d9edff'}
+        intensity={night ? 0.45 : 0.85}
+        color={night ? '#496582' : '#d5e8ff'}
+      />
+      {/* Fill light from below to soften shadows under desks/chairs */}
+      <directionalLight
+        position={[centerX, FLOOR16_WORLD_FRAME.elevationM - 5, centerZ]}
+        target={daylightTarget}
+        intensity={night ? 0.15 : 0.18}
+        color={night ? '#334455' : '#e0e8f0'}
       />
 
       <ProceduralEnvironment />

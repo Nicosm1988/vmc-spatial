@@ -421,10 +421,6 @@ export default function App() {
         {view === '2d' || stage === 'interior' ? <InsightsLegend insight={insight} /> : null}
         {view === '3d' ? <TransitionStatus /> : null}
 
-        <div className="scene-disclaimer" role="status" aria-label="Clasificación de la escena">
-          <span>DEMO · NO VERIFICADO</span>
-          Geometría conceptual · Datos no validados
-        </div>
 
         {editing ? (
           <div className="editing-hud">

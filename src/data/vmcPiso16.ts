@@ -364,4 +364,20 @@ export const VMC_PISO_16: VmcDocument = {
     },
   ],
   orientacion: [],
+  relevamiento: [
+    {
+      element: 'desk-width',
+      valueMm: 1650,
+      toleranceMm: 5,
+      source: 'relevamiento-laser-2026',
+      date: '2026-08-05',
+    },
+    {
+      element: 'desk-depth',
+      valueMm: 850,
+      toleranceMm: 5,
+      source: 'relevamiento-laser-2026',
+      date: '2026-08-05',
+    }
+  ],
 }

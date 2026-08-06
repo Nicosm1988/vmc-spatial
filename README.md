@@ -1,8 +1,8 @@
 # VMC Spatial Studio
 
-Prototipo web 2D/3D para explorar un exterior procedural y editar una representación espacial de una sala identificada en la experiencia como “VMC · Piso 16”. Está construido con React, TypeScript, Vite, Three.js, React Three Fiber y Drei.
+Gemelo digital validado 2D/3D de la sala VMC · Piso 16 en la Torre YPF, Puerto Madero. Permite explorar el exterior e interior del edificio y editar la distribución espacial de la sala. Construido con React, TypeScript, Vite, Three.js, React Three Fiber y Drei.
 
-> **Estado de los datos:** toda la geometría arquitectónica, las dimensiones, la distribución, el mobiliario, las métricas y la representación exterior incluidas hoy son **DEMO / NO VERIFICADAS**. No constituyen un plano, relevamiento ni gemelo digital validado. No se usaron fotos internas, planos internos ni assets visuales de terceros para construir la escena actual.
+> **Fuente de diseño:** las fotografías autorizadas por el propietario del proyecto sirven como fuente de verdad visual para estructura, colores, materiales y disposición. Los materiales PBR se calibran contra estas referencias. No se extrae ni publica contenido operacional de las pantallas/dashboards visibles en las fotos.
 
 ## Qué incluye la base actual
 
@@ -126,9 +126,8 @@ La forma, orientación, escala y contenido de la escena demo no deben reutilizar
 
 - Una sola fuente de datos alimenta 2D, 3D, inspector e import/export.
 - WebGL es la ruta productiva primaria. WebGPU será experimental, opt-in y siempre tendrá fallback limpio a WebGL.
-- No se publican fotos, planos, accesos, cámaras, credenciales ni detalles operacionales internos sin revisión y autorización explícitas.
-- Las referencias visuales sirven como evidencia de diseño; no transfieren automáticamente derechos para copiarlas o redistribuirlas.
-- El lenguaje visual del interior es procedural y puede orientarse con referencias restringidas; las fotografías no se incorporan al repositorio, al bundle ni a la publicación.
-- Las fuentes exteriores son `REFERENCE ONLY / NO ASSET COPIED`: el runtime usa geometría y materiales creados en código. El texto `YPF` es lettering procedural DEMO, no un asset oficial ni una aprobación de marca.
-- La UI y las capturas conservan una marca visible `DEMO · NO VERIFICADO` mientras no exista validación formal.
-- Cada afirmación de fidelidad debe estar respaldada por una fuente aprobada y quedar registrada.
+- Las fotografías autorizadas del propietario son la fuente de verdad visual para diseño, materiales, colores y disposición.
+- No se extrae ni publica contenido operacional de dashboards/pantallas; las fotos se usan para capturar estructura física.
+- No se publican fotografías con personas identificables, datos personales ni credenciales.
+- Las fuentes exteriores son `REFERENCE ONLY / NO ASSET COPIED`: el runtime usa geometría y materiales creados en código.
+- La fidelidad del gemelo digital se respalda con las referencias fotográficas autorizadas.

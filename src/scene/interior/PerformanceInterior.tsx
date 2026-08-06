@@ -10,6 +10,7 @@ import {
   type PerformanceInstance,
 } from './performanceInteriorLayout'
 import { useExperienceStore } from '../../state/useExperienceStore'
+import * as PBR from './pbrMaterials'
 
 export interface PerformanceInteriorProps {
   doc: VmcDocument
@@ -43,6 +44,16 @@ interface InstanceBatchProps {
   toneMapped?: boolean
   castShadow?: boolean
   receiveShadow?: boolean
+  /** MeshPhysicalMaterial PBR extensions (F-037, D-024) */
+  clearcoat?: number
+  clearcoatRoughness?: number
+  sheen?: number
+  sheenRoughness?: number
+  sheenColor?: string
+  ior?: number
+  transmission?: number
+  thickness?: number
+  envMapIntensity?: number
 }
 
 function horizontalShape(points: readonly Point[]) {
@@ -358,6 +369,15 @@ function InstanceBatch({
   toneMapped = true,
   castShadow = false,
   receiveShadow = !transparent && emissiveIntensity === 0,
+  clearcoat = 0,
+  clearcoatRoughness = 0,
+  sheen = 0,
+  sheenRoughness = 0,
+  sheenColor,
+  ior,
+  transmission,
+  thickness,
+  envMapIntensity,
 }: InstanceBatchProps) {
   const ref = useRef<THREE.InstancedMesh>(null)
   useInstances(ref, placements)
@@ -375,7 +395,7 @@ function InstanceBatch({
       receiveShadow={receiveShadow}
     >
       {geometry ? null : <PrimitiveGeometry kind={primitive} />}
-      <meshStandardMaterial
+      <meshPhysicalMaterial
         color="#ffffff"
         emissive={emissive}
         emissiveIntensity={emissiveIntensity}
@@ -392,6 +412,15 @@ function InstanceBatch({
         bumpScale={bumpScale}
         emissiveMap={emissiveMap}
         toneMapped={toneMapped}
+        clearcoat={clearcoat}
+        clearcoatRoughness={clearcoatRoughness}
+        sheen={sheen}
+        sheenRoughness={sheenRoughness}
+        sheenColor={sheenColor}
+        ior={ior}
+        transmission={transmission}
+        thickness={thickness}
+        envMapIntensity={envMapIntensity}
       />
     </instancedMesh>
   )
@@ -584,27 +613,37 @@ export default function PerformanceInterior({
         receiveShadow
         name="presentation-carpet-floor"
       >
-        <meshStandardMaterial
+        <meshPhysicalMaterial
           map={carpet}
           bumpMap={carpet}
-          bumpScale={0.02}
-          color={night ? '#555b64' : '#747b84'}
-          roughness={0.98}
-          metalness={0}
+          bumpScale={0.025}
+          color={night ? '#6b6862' : PBR.CARPET_COLOR}
+          roughness={PBR.CARPET_ROUGHNESS}
+          metalness={PBR.CARPET_METALNESS}
+          sheen={0.3}
+          sheenRoughness={0.8}
+          sheenColor={night ? '#444038' : '#a09888'}
         />
       </mesh>
       <mesh geometry={ringGeometry} position={[0, 0.015, 0]} receiveShadow>
-        <meshStandardMaterial
+        <meshPhysicalMaterial
           map={carpetDark}
           bumpMap={carpetDark}
-          bumpScale={0.01}
-          color={night ? '#3d4249' : '#565c65'}
-          roughness={1}
-          metalness={0}
+          bumpScale={0.015}
+          color={night ? '#484540' : PBR.CARPET_DARK_COLOR}
+          roughness={PBR.CARPET_ROUGHNESS}
+          metalness={PBR.CARPET_METALNESS}
+          sheen={0.2}
+          sheenRoughness={0.85}
+          sheenColor={night ? '#383530' : '#706860'}
         />
       </mesh>
       <mesh geometry={coreGeometry} position={[0, 0.07, 0]} castShadow receiveShadow>
-        <meshStandardMaterial color="#0c1226" roughness={0.85} metalness={0.08} />
+        <meshPhysicalMaterial
+          color={PBR.CORE_COLOR}
+          roughness={PBR.CORE_ROUGHNESS}
+          metalness={PBR.CORE_METALNESS}
+        />
       </mesh>
 
       <InstanceBatch
@@ -621,24 +660,25 @@ export default function PerformanceInterior({
         placements={layout.windowGlass}
         transparent
         opacity={night ? 0.09 : 0.11}
-        metalness={0}
-        roughness={0.1}
+        metalness={PBR.GLASS_METALNESS}
+        roughness={PBR.GLASS_ROUGHNESS}
         depthWrite={false}
         side={THREE.FrontSide}
         renderOrder={2}
+        envMapIntensity={1.2}
         name="floor-to-ceiling-glass"
       />
       <InstanceBatch
         placements={layout.windowFrames}
-        metalness={0.58}
-        roughness={0.46}
+        metalness={PBR.WINDOW_FRAME_METALNESS}
+        roughness={PBR.WINDOW_FRAME_ROUGHNESS}
         name="window-mullions-and-rails"
       />
       <InstanceBatch
         placements={layout.windowShades}
         transparent
         opacity={night ? 0.76 : 0.67}
-        roughness={0.94}
+        roughness={PBR.SHADE_FABRIC_ROUGHNESS}
         depthWrite={false}
         side={THREE.DoubleSide}
         renderOrder={3}
@@ -646,8 +686,8 @@ export default function PerformanceInterior({
       />
       <InstanceBatch
         placements={layout.windowShadeCassettes}
-        metalness={0.24}
-        roughness={0.6}
+        metalness={PBR.SHADE_CASSETTE_METALNESS}
+        roughness={PBR.SHADE_CASSETTE_ROUGHNESS}
         name="roller-shade-cassettes"
       />
 
@@ -668,11 +708,12 @@ export default function PerformanceInterior({
         map={ribbedPanelTexture}
         bumpMap={ribbedPanelTexture}
         bumpScale={0.018}
-        roughness={0.82}
+        roughness={PBR.VIDEOWALL_PANEL_ROUGHNESS}
+        metalness={PBR.VIDEOWALL_PANEL_METALNESS}
         castShadow
         name="video-wall-shells"
       />
-      <InstanceBatch placements={layout.videoWallTrims} roughness={0.7} name="video-wall-trims" />
+      <InstanceBatch placements={layout.videoWallTrims} roughness={0.65} metalness={0.15} name="video-wall-trims" />
       <InstanceBatch
         placements={layout.entryDoorFrames}
         map={ribbedPanelTexture}
@@ -731,15 +772,19 @@ export default function PerformanceInterior({
         map={laminateTexture}
         bumpMap={laminateTexture}
         bumpScale={0.006}
-        metalness={0}
-        roughness={0.6}
+        metalness={PBR.DESK_METALNESS}
+        roughness={PBR.DESK_ROUGHNESS}
+        clearcoat={PBR.DESK_CLEARCOAT}
+        clearcoatRoughness={PBR.DESK_CLEARCOAT_ROUGHNESS}
         castShadow
         name="desk-and-table-tops"
       />
       <InstanceBatch
         placements={layout.tableBases}
-        metalness={0}
-        roughness={0.62}
+        metalness={PBR.PEDESTAL_METALNESS}
+        roughness={PBR.PEDESTAL_ROUGHNESS}
+        clearcoat={PBR.PEDESTAL_CLEARCOAT}
+        clearcoatRoughness={PBR.PEDESTAL_CLEARCOAT_ROUGHNESS}
         castShadow
         name="desk-bases"
       />
@@ -768,14 +813,14 @@ export default function PerformanceInterior({
       <InstanceBatch
         placements={layout.chairSeats}
         geometry={chairSeatGeometry}
-        metalness={0}
-        roughness={0.88}
+        metalness={PBR.CHAIR_SEAT_METALNESS}
+        roughness={PBR.CHAIR_SEAT_ROUGHNESS}
         name="ergonomic-chair-seats"
       />
       <InstanceBatch
         placements={layout.chairBackFrames}
-        metalness={0}
-        roughness={0.6}
+        metalness={PBR.CHAIR_MESH_METALNESS}
+        roughness={PBR.CHAIR_MESH_ROUGHNESS}
         name="ergonomic-chair-back-frames"
       />
       <InstanceBatch
@@ -784,33 +829,33 @@ export default function PerformanceInterior({
         alphaMap={chairMeshAlpha}
         alphaTest={0.3}
         side={THREE.DoubleSide}
-        roughness={0.98}
+        roughness={0.95}
         name="perforated-chair-mesh"
       />
       <InstanceBatch
         placements={layout.chairArmrests}
-        metalness={0}
-        roughness={0.66}
+        metalness={PBR.CHAIR_ARMREST_METALNESS}
+        roughness={PBR.CHAIR_ARMREST_ROUGHNESS}
         name="ergonomic-chair-armrests"
       />
       <InstanceBatch
         placements={layout.chairStems}
         primitive="cylinder"
-        metalness={0.66}
-        roughness={0.34}
+        metalness={PBR.CHAIR_BASE_METALNESS}
+        roughness={PBR.CHAIR_BASE_ROUGHNESS}
         name="chair-stems"
       />
       <InstanceBatch
         placements={layout.chairSpokes}
-        metalness={0.5}
-        roughness={0.44}
+        metalness={0.6}
+        roughness={0.38}
         name="five-spoke-chair-bases"
       />
       <InstanceBatch
         placements={layout.chairCasters}
         primitive="sphere"
-        metalness={0.36}
-        roughness={0.5}
+        metalness={0.45}
+        roughness={0.42}
         name="chair-casters"
       />
 
@@ -818,8 +863,8 @@ export default function PerformanceInterior({
         placements={layout.monitorFrames}
         geometry={monitorFrameGeometry}
         side={THREE.BackSide}
-        metalness={0}
-        roughness={0.54}
+        metalness={PBR.MONITOR_FRAME_METALNESS}
+        roughness={PBR.MONITOR_FRAME_ROUGHNESS}
         name="curved-monitor-frames"
       />
       <InstanceBatch
@@ -831,31 +876,33 @@ export default function PerformanceInterior({
         emissive={night ? '#76a9c7' : '#31566c'}
         emissiveIntensity={night ? 0.38 : 0.12}
         metalness={0}
-        roughness={0.26}
+        roughness={0.22}
+        envMapIntensity={0.6}
         name="curved-ultrawide-screens"
       />
       <InstanceBatch
         placements={layout.monitorStems}
-        metalness={0.55}
-        roughness={0.4}
+        metalness={PBR.MONITOR_STAND_METALNESS}
+        roughness={PBR.MONITOR_STAND_ROUGHNESS}
         name="monitor-support-stems"
       />
       <InstanceBatch
         placements={layout.monitorBases}
-        metalness={0.55}
-        roughness={0.4}
+        metalness={PBR.MONITOR_STAND_METALNESS}
+        roughness={PBR.MONITOR_STAND_ROUGHNESS}
         name="monitor-support-bases"
       />
 
       {roof ? (
         <group name="technical-ceiling">
           <mesh geometry={floorGeometry} position={[0, mmToMeters(doc.alturaLibre), 0]}>
-            <meshStandardMaterial
-              color={night ? '#5f6265' : '#deddd8'}
+            <meshPhysicalMaterial
+              color={night ? '#5f6265' : PBR.CEILING_COLOR}
               transparent
               opacity={0.18}
               depthWrite={false}
-              roughness={0.9}
+              roughness={PBR.CEILING_ROUGHNESS}
+              metalness={PBR.CEILING_METALNESS}
               side={THREE.DoubleSide}
             />
           </mesh>
@@ -864,25 +911,25 @@ export default function PerformanceInterior({
             map={ceilingTileTexture}
             bumpMap={ceilingTileTexture}
             bumpScale={0.008}
-            metalness={0}
-            roughness={0.86}
+            metalness={PBR.CEILING_METALNESS}
+            roughness={PBR.CEILING_ROUGHNESS}
             name="technical-ceiling-panels"
           />
           <InstanceBatch
             placements={layout.ceilingLights}
-            emissive={night ? '#ffd994' : '#fff4d5'}
-            emissiveIntensity={night ? 1.35 : 0.78}
-            roughness={0.24}
+            emissive={night ? PBR.LUMINAIRE_EMISSIVE_NIGHT : PBR.LUMINAIRE_EMISSIVE_DAY}
+            emissiveIntensity={night ? PBR.LUMINAIRE_INTENSITY_NIGHT : PBR.LUMINAIRE_INTENSITY_DAY}
+            roughness={0.2}
             name="technical-ceiling-luminaires"
           />
           {practicalLights.map((light) => (
             <pointLight
               key={light.id}
               position={[light.position[0], light.position[1] - 0.22, light.position[2]]}
-              color={night ? '#ffdba0' : '#fff1cf'}
-              intensity={night ? 7 : 2.8}
-              distance={10}
-              decay={2}
+              color={night ? PBR.PRACTICAL_LIGHT_COLOR_NIGHT : PBR.PRACTICAL_LIGHT_COLOR_DAY}
+              intensity={night ? PBR.PRACTICAL_LIGHT_INTENSITY_NIGHT : PBR.PRACTICAL_LIGHT_INTENSITY_DAY}
+              distance={PBR.PRACTICAL_LIGHT_DISTANCE}
+              decay={PBR.PRACTICAL_LIGHT_DECAY}
             />
           ))}
         </group>

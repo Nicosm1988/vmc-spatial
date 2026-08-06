@@ -38,11 +38,12 @@ describe('quality profile resolution', () => {
     expect(resolveQuality('auto', hints)).toBe('performance')
   })
 
-  it('keeps cinematic effects progressive and disabled in lower profiles', () => {
+  it('keeps cinematic effects progressive and disabled only in performance', () => {
     expect(QUALITY_PROFILES.performance.postprocessing).toBe(false)
-    expect(QUALITY_PROFILES.balanced.postprocessing).toBe(false)
+    expect(QUALITY_PROFILES.balanced.postprocessing).toBe(true)
     expect(QUALITY_PROFILES.cinematic.postprocessing).toBe(true)
-    expect(QUALITY_PROFILES.performance.dpr).toBeLessThan(QUALITY_PROFILES.cinematic.dpr)
+    expect(QUALITY_PROFILES.performance.dpr).toBeLessThan(QUALITY_PROFILES.balanced.dpr)
+    expect(QUALITY_PROFILES.balanced.dpr).toBeLessThan(QUALITY_PROFILES.cinematic.dpr)
     expect(QUALITY_PROFILES.performance.exteriorDetail).toBe('mid')
     expect(QUALITY_PROFILES.balanced.exteriorDetail).toBe('near')
   })
