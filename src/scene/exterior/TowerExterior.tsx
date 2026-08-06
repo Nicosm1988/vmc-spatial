@@ -83,12 +83,13 @@ function YpfFacadeSign({ night }: { night: boolean }) {
     >
       <instancedMesh ref={letters} args={[undefined, undefined, YPF_STROKES.length]} castShadow>
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial
-          color={night ? '#f2fbff' : '#ffffff'}
-          emissive={night ? '#b8ddf0' : '#202830'}
-          emissiveIntensity={night ? 1.25 : 0.08}
-          metalness={0.12}
-          roughness={0.24}
+        <meshPhysicalMaterial
+          color={night ? '#e0f7fa' : '#ffffff'}
+          emissive={night ? '#4fc3f7' : '#e0e0e0'}
+          emissiveIntensity={night ? 1.5 : 0.2}
+          metalness={0.2}
+          roughness={0.1}
+          clearcoat={1}
         />
       </instancedMesh>
     </group>
@@ -199,16 +200,16 @@ function GardenFacade({
   return (
     <group>
       <instancedMesh ref={trunks} args={[undefined, undefined, canopyCount]}>
-        <cylinderGeometry args={[0.5, 0.65, 1, 6]} />
-        <meshStandardMaterial color="#4a3929" roughness={0.96} />
+        <cylinderGeometry args={[0.3, 0.4, 1.5, 6]} />
+        <meshPhysicalMaterial color="#3a2e24" roughness={0.9} metalness={0.1} />
       </instancedMesh>
       <instancedMesh ref={canopies} args={[undefined, undefined, canopyCount]}>
-        <icosahedronGeometry args={[1, 1]} />
-        <meshStandardMaterial
-          color={night ? '#28563b' : '#3d7652'}
-          emissive={night ? '#173b2c' : '#000000'}
-          emissiveIntensity={night ? 0.5 : 0}
-          roughness={0.9}
+        <icosahedronGeometry args={[1, 2]} />
+        <meshPhysicalMaterial
+          color={night ? '#183824' : '#275236'}
+          roughness={0.8}
+          metalness={0.1}
+          clearcoat={0.1}
         />
       </instancedMesh>
       <instancedMesh ref={panes} args={[undefined, undefined, modules.length]} renderOrder={4}>
@@ -373,26 +374,32 @@ export function TowerExterior({ centerX, centerZ, noche, detail = 'near' }: Towe
       <group position={cityPosition} rotation={[0, city.rotationRad, 0]}>
         <mesh geometry={geometry.cityMass} castShadow receiveShadow>
           <meshPhysicalMaterial
-            color={noche ? '#4c5963' : '#87949b'}
-            emissive={noche ? '#182632' : '#000000'}
-            emissiveIntensity={noche ? 0.25 : 0}
-            metalness={noche ? 0.42 : 0.34}
-            roughness={noche ? 0.38 : 0.34}
-            clearcoat={detail === 'near' ? 0.34 : 0.1}
-            clearcoatRoughness={0.4}
+            color={noche ? '#0f1a24' : '#e0f2fe'}
+            transmission={0.95}
+            opacity={1}
+            transparent
+            ior={1.5}
+            thickness={2.5}
+            metalness={0.8}
+            roughness={0.05}
+            clearcoat={1}
+            clearcoatRoughness={0.1}
           />
         </mesh>
       </group>
       <group position={prowPosition} rotation={[0, prow.rotationRad, 0]}>
         <mesh geometry={geometry.prowMass} castShadow receiveShadow>
           <meshPhysicalMaterial
-            color={noche ? '#315a78' : '#87aec2'}
-            emissive={noche ? '#0b2b45' : '#000000'}
-            emissiveIntensity={noche ? 0.34 : 0}
-            metalness={noche ? 0.16 : 0.06}
-            roughness={noche ? 0.24 : 0.17}
-            clearcoat={detail === 'near' ? 0.62 : 0.2}
-            clearcoatRoughness={0.23}
+            color={noche ? '#081724' : '#bae6fd'}
+            transmission={0.95}
+            opacity={1}
+            transparent
+            ior={1.5}
+            thickness={3.0}
+            metalness={0.9}
+            roughness={0.02}
+            clearcoat={1}
+            clearcoatRoughness={0.05}
           />
         </mesh>
       </group>
